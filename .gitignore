@@ -1,0 +1,36 @@
+# Local acceptance configuration and private runtime data
+.local/
+
+# QQ databases, encrypted indexes, keys, caches, exports, and diagnostics
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.key
+*.bak
+*.dmp
+exports/
+diagnostics/
+cache/
+temp/
+
+# Common local build and Python artifacts
+[Bb]in/
+[Oo]bj/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.tools/
+build/
+dist/
+*.egg-info/
+
+# Local IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
