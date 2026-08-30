@@ -61,6 +61,11 @@
           "System.CodeDom": "10.0.11"
         }
       },
+      "System.Security.Cryptography.ProtectedData": {
+        "type": "Transitive",
+        "resolved": "10.0.11",
+        "contentHash": "PNoxCTPb+Tlux+GJyq4c89ddYdpioVSqfGx8pqOF6shCSKwUNNctXhQtRkCICjbJmGrJJsW8NY52kVYO/b8mlQ=="
+      },
       "qqchatlocalreader.core": {
         "type": "Project"
       },
@@ -71,7 +76,8 @@
           "Microsoft.Data.Sqlite.Core": "[10.0.11, )",
           "QQChatLocalReader.Core": "[1.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
-          "System.Management": "[10.0.11, )"
+          "System.Management": "[10.0.11, )",
+          "System.Security.Cryptography.ProtectedData": "[10.0.11, )"
         }
       }
     },

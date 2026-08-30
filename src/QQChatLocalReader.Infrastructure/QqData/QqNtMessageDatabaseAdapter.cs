@@ -324,6 +324,7 @@ public sealed class QqNtMessageDatabaseAdapter
                 AccountId = accountId,
                 ConversationType = message.Conversation.Type,
                 ConversationId = message.Conversation.Id,
+                ConversationDisplayName = message.Conversation.DisplayName,
                 StableMessageId = message.StableMessageId.ToString(CultureInfo.InvariantCulture),
                 TimestampUtc = DateTimeOffset.FromUnixTimeSeconds(message.Timestamp),
                 RawDirection = message.Direction,

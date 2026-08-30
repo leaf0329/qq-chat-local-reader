@@ -11,6 +11,8 @@ public sealed class QqMessageRecord
 
     public required string ConversationId { get; init; }
 
+    public required string ConversationDisplayName { get; init; }
+
     public required string StableMessageId { get; init; }
 
     public required DateTimeOffset TimestampUtc { get; init; }
