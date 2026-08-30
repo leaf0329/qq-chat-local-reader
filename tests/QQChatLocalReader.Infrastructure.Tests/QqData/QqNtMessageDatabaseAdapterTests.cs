@@ -44,6 +44,15 @@ public sealed class QqNtMessageDatabaseAdapterTests : IDisposable
                 Assert.Equal("30003", item.Id);
                 Assert.Equal("30003", item.DisplayName);
             });
+
+        var report = adapter.ValidateMessageBodies(new SyncRequest(
+            "10001",
+            conversations,
+            new TimeRange(
+                DateTimeOffset.FromUnixTimeSeconds(1_699_999_999),
+                DateTimeOffset.FromUnixTimeSeconds(1_700_000_003))));
+        Assert.Equal(3, report.MessageCount);
+        Assert.Equal(3, report.MalformedBodyCount);
     }
 
     [Fact]

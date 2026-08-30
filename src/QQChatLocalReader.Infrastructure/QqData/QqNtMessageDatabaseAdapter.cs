@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using QQChatLocalReader.Core.Models;
+using QQChatLocalReader.Infrastructure.QqData.MessageBodies;
 using QQChatLocalReader.Infrastructure.Secrets;
 
 namespace QQChatLocalReader.Infrastructure.QqData;
@@ -84,6 +85,28 @@ public sealed class QqNtMessageDatabaseAdapter
             return true;
         });
         return conversations ?? throw new InvalidOperationException("The conversation list could not be read.");
+    }
+
+    public QqMessageBodyValidationReport ValidateMessageBodies(SyncRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!request.AccountId.Equals(accountId, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The sync request belongs to a different QQ account.", nameof(request));
+        }
+
+        var accumulator = new MessageBodyValidationAccumulator();
+        key.Use(candidate =>
+        {
+            using var connection = QqSqlCipherConnectionFactory.Open(database, candidate);
+            foreach (var conversation in request.Conversations)
+            {
+                ReadMessageBodies(connection, conversation, request.Range, accumulator);
+            }
+
+            return true;
+        });
+        return accumulator.CreateReport();
     }
 
     private static void ValidateSchema(QqDatabaseSchema schema)
@@ -192,5 +215,107 @@ public sealed class QqNtMessageDatabaseAdapter
         }
 
         return conversations;
+    }
+
+    private static void ReadMessageBodies(
+        SqliteConnection connection,
+        ConversationDescriptor conversation,
+        TimeRange range,
+        MessageBodyValidationAccumulator accumulator)
+    {
+        if (!long.TryParse(conversation.Id, NumberStyles.None, CultureInfo.InvariantCulture, out var conversationId) ||
+            conversationId <= 0)
+        {
+            throw new ArgumentException("The conversation has an unsupported identifier.", nameof(conversation));
+        }
+
+        var tableName = conversation.Type switch
+        {
+            ConversationType.Private => "c2c_msg_table",
+            ConversationType.Group => "group_msg_table",
+            _ => throw new ArgumentOutOfRangeException(nameof(conversation)),
+        };
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            $"""
+            SELECT "40800"
+            FROM {tableName}
+            WHERE "40030" = $conversationId
+              AND "40050" >= $startTime
+              AND "40050" < $endTime
+            ORDER BY "40050", "40001";
+            """;
+        command.Parameters.AddWithValue("$conversationId", conversationId);
+        command.Parameters.AddWithValue("$startTime", range.StartUtc.ToUnixTimeSeconds());
+        command.Parameters.AddWithValue("$endTime", range.EndUtc.ToUnixTimeSeconds());
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            if (reader.IsDBNull(0))
+            {
+                accumulator.AddMissingBody();
+            }
+            else
+            {
+                accumulator.Add(QqMessageBodyParser.Parse(reader.GetFieldValue<byte[]>(0)));
+            }
+        }
+    }
+
+    private sealed class MessageBodyValidationAccumulator
+    {
+        private int messageCount;
+        private int missingBodyCount;
+        private int completeBodyCount;
+        private int partialBodyCount;
+        private int malformedBodyCount;
+        private int segmentCount;
+        private int textSegmentCount;
+        private int emojiSegmentCount;
+        private int replySegmentCount;
+        private int unsupportedFieldCount;
+
+        public void AddMissingBody()
+        {
+            messageCount++;
+            missingBodyCount++;
+        }
+
+        public void Add(QqMessageBody body)
+        {
+            messageCount++;
+            switch (body.Status)
+            {
+                case QqMessageBodyParseStatus.Complete:
+                    completeBodyCount++;
+                    break;
+                case QqMessageBodyParseStatus.Partial:
+                    partialBodyCount++;
+                    break;
+                case QqMessageBodyParseStatus.Malformed:
+                    malformedBodyCount++;
+                    break;
+                default:
+                    throw new InvalidOperationException("The message parser returned an unknown status.");
+            }
+
+            segmentCount += body.Segments.Count;
+            textSegmentCount += body.Segments.Count(segment => segment.ContentType == QqMessageContentType.Text);
+            emojiSegmentCount += body.Segments.Count(segment => segment.ContentType == QqMessageContentType.QqFace);
+            replySegmentCount += body.Segments.Count(segment => segment.ContentType == QqMessageContentType.Reply);
+            unsupportedFieldCount += body.UnsupportedFieldCount;
+        }
+
+        public QqMessageBodyValidationReport CreateReport() => new(
+            messageCount,
+            missingBodyCount,
+            completeBodyCount,
+            partialBodyCount,
+            malformedBodyCount,
+            segmentCount,
+            textSegmentCount,
+            emojiSegmentCount,
+            replySegmentCount,
+            unsupportedFieldCount);
     }
 }

@@ -29,6 +29,11 @@
         "resolved": "3.1.4",
         "contentHash": "5mj99LvCqrq3CNi06xYdyIAXOEh+5b33F2nErCzI5zWiDdLHXiPXEWFSUAF8zlIv0ZWqjZNCwHTQeAPYbF3pCg=="
       },
+      "Google.Protobuf": {
+        "type": "Transitive",
+        "resolved": "3.36.0",
+        "contentHash": "wDPg8sKlmA8we1bqnC9DYKwLog4PNJ4GYTWV9FkzlGvfs3kNCSt2x0Qe31SBOeBPS2JGEZ/lNfil/Bkwx18Ufg=="
+      },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
         "resolved": "17.14.1",
@@ -147,6 +152,7 @@
       "qqchatlocalreader.infrastructure": {
         "type": "Project",
         "dependencies": {
+          "Google.Protobuf": "[3.36.0, )",
           "Microsoft.Data.Sqlite.Core": "[10.0.11, )",
           "QQChatLocalReader.Core": "[1.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",

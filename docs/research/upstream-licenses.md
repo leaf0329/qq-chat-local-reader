@@ -13,6 +13,7 @@ Reviewed on 2026-08-30. Repository metadata and license texts must be checked ag
 | `GPDdev/qq-chat-exporter-and-report-generator` | Apache-2.0 | Candidate for selective reuse after file-level review; preserve license, attribution, NOTICE, and modification requirements. |
 | `Zzzzzzyt/ntqq-data-merge` | Unlicense | Candidate for selective reuse after verifying the relevant file has no additional notice or incompatible dependency. |
 | `g122622/synthos` | MIT | Candidate for selective reuse after file-level provenance and dependency review; preserve copyright and license notices. |
+| `Google.Protobuf` 3.36.0 | BSD-3-Clause | Approved runtime dependency for bounded Protobuf wire decoding; include its copyright and license notice in distributed third-party notices. |
 
 ## Rules
 
@@ -33,3 +34,4 @@ Reviewed on 2026-08-30. Repository metadata and license texts must be checked ag
 - <https://github.com/GPDdev/qq-chat-exporter-and-report-generator>
 - <https://github.com/Zzzzzzyt/ntqq-data-merge>
 - <https://github.com/g122622/synthos>
+- <https://www.nuget.org/packages/Google.Protobuf/3.36.0>
