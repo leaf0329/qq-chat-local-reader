@@ -13,6 +13,8 @@ A non-elevated process and its elevated child run at different integrity levels.
 
 The main application remains `asInvoker`. It launches a separate `requireAdministrator` snapshot helper with the Windows `runas` verb only when a fresh snapshot is required. Refusing or cancelling the UAC prompt is a normal, recoverable outcome and does not weaken the policy automatically.
 
+The helper is published as a self-contained Windows x64 executable so elevation does not depend on a machine-wide .NET installation. The main process bounds the initial connection wait; startup errors remain visible instead of leaving an invisible dialog and an indefinite wait.
+
 The command line contains only a random pipe name and the main process ID. Source and destination paths travel through a one-shot named pipe whose ACL grants access only to the current Windows user. The pipe uses the first-server-instance guarantee, and both endpoints verify the peer process ID through the Windows named-pipe APIs before exchanging a request.
 
 The helper independently reloads the configured QQ data root. It accepts only an existing `nt_msg.db` in the direct `<QQ root>/<account>/nt_qq/nt_db/` layout, rejects reparse points in that path, and accepts at most the known QQ companion files beside that database. The destination is fixed to the application's per-user temporary directory. Keys, chat content, account identifiers, and filesystem paths are not accepted as command-line arguments and are not written to standard output or error.

@@ -10,6 +10,7 @@ namespace QQChatLocalReader.Infrastructure.SnapshotHelper;
 public sealed class ElevatedSnapshotClient
 {
     private const int ErrorCancelled = 1223;
+    private static readonly TimeSpan ConnectionTimeout = TimeSpan.FromSeconds(30);
     private readonly string helperExecutablePath;
 
     public ElevatedSnapshotClient(string helperExecutablePath)
@@ -35,7 +36,9 @@ public sealed class ElevatedSnapshotClient
         await using var server = SecureSnapshotPipe.CreateServer(pipeName);
         using var helper = StartHelper(pipeName);
 
-        var connectionTask = server.WaitForConnectionAsync(cancellationToken);
+        using var connectionTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        connectionTimeout.CancelAfter(ConnectionTimeout);
+        var connectionTask = server.WaitForConnectionAsync(connectionTimeout.Token);
         var exitTask = helper.WaitForExitAsync(cancellationToken);
         var firstCompleted = await Task.WhenAny(connectionTask, exitTask).ConfigureAwait(false);
         if (firstCompleted == exitTask && !server.IsConnected)
@@ -43,7 +46,15 @@ public sealed class ElevatedSnapshotClient
             throw new SnapshotHelperException("The elevated snapshot helper exited before connecting.");
         }
 
-        await connectionTask.ConfigureAwait(false);
+        try
+        {
+            await connectionTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryTerminateUnconnectedHelper(helper);
+            throw new SnapshotHelperException("The elevated snapshot helper did not connect in time.");
+        }
         if (PipePeerProcess.GetClientProcessId(server) != helper.Id)
         {
             throw new SecurityException("An unexpected process connected to the snapshot pipe.");
@@ -87,7 +98,6 @@ public sealed class ElevatedSnapshotClient
             WorkingDirectory = Path.GetDirectoryName(helperExecutablePath)!,
             UseShellExecute = true,
             Verb = "runas",
-            WindowStyle = ProcessWindowStyle.Hidden,
         };
         startInfo.ArgumentList.Add("--pipe");
         startInfo.ArgumentList.Add(pipeName);
@@ -169,6 +179,20 @@ public sealed class ElevatedSnapshotClient
         }
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+        }
+    }
+
+    private static void TryTerminateUnconnectedHelper(Process helper)
+    {
+        try
+        {
+            if (!helper.HasExited)
+            {
+                helper.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
         {
         }
     }
