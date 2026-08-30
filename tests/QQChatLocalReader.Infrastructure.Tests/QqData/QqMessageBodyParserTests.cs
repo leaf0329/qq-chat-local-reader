@@ -99,6 +99,87 @@ public sealed class QqMessageBodyParserTests
         Assert.Empty(result.Segments);
     }
 
+    [Fact]
+    public void ParseKeepsConfirmedMediaMetadataScopedToItsMediaType()
+    {
+        var image = CreateMessage(output =>
+        {
+            WriteInt32(output, 45002, 2);
+            WriteInt32(output, 45003, 1);
+            WriteString(output, 45402, "masked.jpg");
+            WriteInt64(output, 45405, 1024);
+            WriteInt32(output, 45411, 800);
+            WriteInt32(output, 45412, 600);
+            WriteString(output, 45812, "masked/image/path");
+        });
+        var video = CreateMessage(output =>
+        {
+            WriteInt32(output, 45002, 5);
+            WriteInt32(output, 45003, 7);
+            WriteInt32(output, 45410, 12);
+            WriteInt32(output, 45413, 1920);
+            WriteInt32(output, 45414, 1080);
+            WriteString(output, 45422, "masked/preview/path");
+        });
+        var file = CreateMessage(output =>
+        {
+            WriteInt32(output, 45002, 3);
+            WriteInt32(output, 45003, 11);
+            WriteString(output, 45402, "masked.pdf");
+            WriteString(output, 45403, "masked/sending/path");
+            WriteInt64(output, 45405, 2048);
+            WriteString(output, 45419, "pdf");
+            WriteString(output, 45954, "masked/file/preview");
+        });
+        var voice = CreateMessage(output =>
+        {
+            WriteInt32(output, 45002, 4);
+            WriteInt32(output, 45003, 2);
+            WriteInt32(output, 45410, 99);
+        });
+        var body = CreateMessage(output =>
+        {
+            WriteBytes(output, 40800, image);
+            WriteBytes(output, 40800, video);
+            WriteBytes(output, 40800, file);
+            WriteBytes(output, 40800, voice);
+        });
+
+        var result = QqMessageBodyParser.Parse(body);
+
+        Assert.Equal(QqMessageBodyParseStatus.Partial, result.Status);
+        Assert.Equal(1, result.UnsupportedFieldCount);
+        Assert.Collection(
+            result.Segments,
+            segment =>
+            {
+                Assert.Equal(1, segment.Media?.RawMediaSubtype);
+                Assert.Equal("masked.jpg", segment.Media?.FileName);
+                Assert.Equal(1024, segment.Media?.FileSize);
+                Assert.Equal(800, segment.Media?.Width);
+                Assert.Equal(600, segment.Media?.Height);
+                Assert.Null(segment.Media?.DurationSeconds);
+                Assert.DoesNotContain("masked.jpg", segment.Media!.ToString(), StringComparison.Ordinal);
+            },
+            segment =>
+            {
+                Assert.Equal(12, segment.Media?.DurationSeconds);
+                Assert.Equal(1920, segment.Media?.Width);
+                Assert.Equal(1080, segment.Media?.Height);
+                Assert.Equal("masked/preview/path", segment.Media?.PreviewPath);
+            },
+            segment =>
+            {
+                Assert.Equal(11, segment.Media?.RawMediaSubtype);
+                Assert.Equal("masked.pdf", segment.Media?.FileName);
+                Assert.Equal("masked/sending/path", segment.Media?.LocalPath);
+                Assert.Equal(2048, segment.Media?.FileSize);
+                Assert.Equal("pdf", segment.Media?.FileExtension);
+                Assert.Equal("masked/file/preview", segment.Media?.PreviewPath);
+            },
+            segment => Assert.Null(segment.Media?.DurationSeconds));
+    }
+
     private static byte[] CreateMessage(Action<CodedOutputStream> write)
     {
         using var stream = new MemoryStream();

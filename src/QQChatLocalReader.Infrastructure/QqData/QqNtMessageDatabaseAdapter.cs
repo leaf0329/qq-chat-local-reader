@@ -14,6 +14,7 @@ public sealed class QqNtMessageDatabaseAdapter
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["40001"] = "INTEGER",
+            ["40003"] = "INTEGER",
             ["40010"] = "INTEGER",
             ["40013"] = "INTEGER",
             ["40020"] = "TEXT",
@@ -24,6 +25,7 @@ public sealed class QqNtMessageDatabaseAdapter
             ["40050"] = "INTEGER",
             ["40093"] = "TEXT",
             ["40800"] = "BLOB",
+            ["40850"] = "INTEGER",
         };
 
     private readonly string accountId;
@@ -89,24 +91,41 @@ public sealed class QqNtMessageDatabaseAdapter
 
     public QqMessageBodyValidationReport ValidateMessageBodies(SyncRequest request)
     {
+        var accumulator = new MessageBodyValidationAccumulator();
+        foreach (var message in ReadMessages(request))
+        {
+            if (message.Body is null)
+            {
+                accumulator.AddMissingBody();
+            }
+            else
+            {
+                accumulator.Add(message.Body);
+            }
+        }
+
+        return accumulator.CreateReport();
+    }
+
+    public IReadOnlyList<QqMessageRecord> ReadMessages(SyncRequest request)
+    {
         ArgumentNullException.ThrowIfNull(request);
         if (!request.AccountId.Equals(accountId, StringComparison.Ordinal))
         {
             throw new ArgumentException("The sync request belongs to a different QQ account.", nameof(request));
         }
 
-        var accumulator = new MessageBodyValidationAccumulator();
+        List<RawMessage>? messages = null;
         key.Use(candidate =>
         {
             using var connection = QqSqlCipherConnectionFactory.Open(database, candidate);
-            foreach (var conversation in request.Conversations)
-            {
-                ReadMessageBodies(connection, conversation, request.Range, accumulator);
-            }
-
+            messages = request.Conversations
+                .SelectMany(conversation => ReadRawMessages(connection, conversation, request.Range))
+                .ToList();
             return true;
         });
-        return accumulator.CreateReport();
+
+        return ResolveMessages(messages ?? throw new InvalidOperationException("The messages could not be read."));
     }
 
     private static void ValidateSchema(QqDatabaseSchema schema)
@@ -217,11 +236,10 @@ public sealed class QqNtMessageDatabaseAdapter
         return conversations;
     }
 
-    private static void ReadMessageBodies(
+    private static List<RawMessage> ReadRawMessages(
         SqliteConnection connection,
         ConversationDescriptor conversation,
-        TimeRange range,
-        MessageBodyValidationAccumulator accumulator)
+        TimeRange range)
     {
         if (!long.TryParse(conversation.Id, NumberStyles.None, CultureInfo.InvariantCulture, out var conversationId) ||
             conversationId <= 0)
@@ -238,7 +256,7 @@ public sealed class QqNtMessageDatabaseAdapter
         using var command = connection.CreateCommand();
         command.CommandText =
             $"""
-            SELECT "40800"
+            SELECT "40001", "40003", "40013", "40033", "40050", "40093", "40800", "40850"
             FROM {tableName}
             WHERE "40030" = $conversationId
               AND "40050" >= $startTime
@@ -249,17 +267,155 @@ public sealed class QqNtMessageDatabaseAdapter
         command.Parameters.AddWithValue("$startTime", range.StartUtc.ToUnixTimeSeconds());
         command.Parameters.AddWithValue("$endTime", range.EndUtc.ToUnixTimeSeconds());
         using var reader = command.ExecuteReader();
+        var messages = new List<RawMessage>();
         while (reader.Read())
         {
-            if (reader.IsDBNull(0))
+            messages.Add(new RawMessage
             {
-                accumulator.AddMissingBody();
+                Conversation = conversation,
+                StableMessageId = reader.GetInt64(0),
+                Sequence = reader.IsDBNull(1) ? null : reader.GetInt64(1),
+                Direction = reader.GetInt32(2),
+                SenderId = reader.GetInt64(3),
+                Timestamp = reader.GetInt64(4),
+                SenderDisplayName = reader.IsDBNull(5) ? null : reader.GetString(5),
+                Body = reader.IsDBNull(6)
+                    ? null
+                    : QqMessageBodyParser.Parse(reader.GetFieldValue<byte[]>(6)),
+                MainReplySequence = reader.IsDBNull(7) ? null : reader.GetInt64(7),
+            });
+        }
+
+        return messages;
+    }
+
+    private QqMessageRecord[] ResolveMessages(IReadOnlyList<RawMessage> messages)
+    {
+        var indexes = messages
+            .GroupBy(message => message.Conversation.StableKey)
+            .ToDictionary(group => group.Key, group => new ConversationMessageIndex(group), StringComparer.Ordinal);
+
+        return messages
+            .OrderBy(message => message.Timestamp)
+            .ThenBy(message => message.Conversation.StableKey, StringComparer.Ordinal)
+            .ThenBy(message => message.StableMessageId)
+            .Select(message =>
+        {
+            var index = indexes[message.Conversation.StableKey];
+            var targets = new HashSet<long>();
+            if (message.Conversation.Type == ConversationType.Group)
+            {
+                AddTarget(index.ResolveSequence(message.MainReplySequence), targets);
+                foreach (var reference in GetReplyReferences(message.Body))
+                {
+                    AddTarget(index.ResolveSequence(reference.SequenceCandidate), targets);
+                }
             }
             else
             {
-                accumulator.Add(QqMessageBodyParser.Parse(reader.GetFieldValue<byte[]>(0)));
+                foreach (var reference in GetReplyReferences(message.Body))
+                {
+                    AddTarget(index.ResolveMessageId(reference.MessageIdCandidate), targets);
+                }
             }
+
+            return new QqMessageRecord
+            {
+                AccountId = accountId,
+                ConversationType = message.Conversation.Type,
+                ConversationId = message.Conversation.Id,
+                StableMessageId = message.StableMessageId.ToString(CultureInfo.InvariantCulture),
+                TimestampUtc = DateTimeOffset.FromUnixTimeSeconds(message.Timestamp),
+                RawDirection = message.Direction,
+                SenderId = message.SenderId.ToString(CultureInfo.InvariantCulture),
+                SenderDisplayName = message.SenderDisplayName,
+                Body = message.Body,
+                ReplyTargetMessageIds = targets
+                    .Order()
+                    .Select(target => target.ToString(CultureInfo.InvariantCulture))
+                    .ToArray(),
+            };
+        }).ToArray();
+    }
+
+    private static IEnumerable<QqReplyReference> GetReplyReferences(QqMessageBody? body) =>
+        body?.Segments
+            .Where(segment => segment.Reply is not null)
+            .Select(segment => segment.Reply!) ?? [];
+
+    private static void AddTarget(long? target, HashSet<long> targets)
+    {
+        if (target.HasValue)
+        {
+            targets.Add(target.Value);
         }
+    }
+
+    private sealed class ConversationMessageIndex
+    {
+        private readonly Dictionary<long, long?> messageIds;
+        private readonly Dictionary<long, long?> sequences;
+
+        public ConversationMessageIndex(IEnumerable<RawMessage> messages)
+        {
+            var records = messages.ToArray();
+            messageIds = Build(records, message => message.StableMessageId);
+            sequences = Build(records, message => message.Sequence);
+        }
+
+        public long? ResolveMessageId(long? candidate) => Resolve(messageIds, candidate);
+
+        public long? ResolveSequence(long? candidate) => Resolve(sequences, candidate);
+
+        private static Dictionary<long, long?> Build(
+            IEnumerable<RawMessage> messages,
+            Func<RawMessage, long?> candidateSelector)
+        {
+            var index = new Dictionary<long, long?>();
+            foreach (var message in messages)
+            {
+                var candidate = candidateSelector(message);
+                if (candidate is not > 0)
+                {
+                    continue;
+                }
+
+                if (!index.TryAdd(candidate.Value, message.StableMessageId))
+                {
+                    index[candidate.Value] = null;
+                }
+            }
+
+            return index;
+        }
+
+        private static long? Resolve(Dictionary<long, long?> index, long? candidate)
+        {
+            return candidate is > 0 && index.TryGetValue(candidate.Value, out var target)
+                ? target
+                : null;
+        }
+    }
+
+    private sealed class RawMessage
+    {
+        public required ConversationDescriptor Conversation { get; init; }
+
+        public required long StableMessageId { get; init; }
+
+        public long? Sequence { get; init; }
+
+        public required int Direction { get; init; }
+
+        public required long SenderId { get; init; }
+
+        public required long Timestamp { get; init; }
+
+        public string? SenderDisplayName { get; init; }
+
+        public QqMessageBody? Body { get; init; }
+
+        public long? MainReplySequence { get; init; }
     }
 
     private sealed class MessageBodyValidationAccumulator

@@ -22,6 +22,6 @@ The version adapter exposes aggregate validation for an explicit `SyncRequest` a
 ## Consequences
 
 - Text, QQ-face metadata, and reply candidates can be extracted without GPL code or a generated schema.
-- Media and other extension fields remain explicitly partial until their minimal metadata parsers are implemented.
+- Verified media metadata is added by ADR 0007; all remaining extension fields stay explicitly partial.
 - A structurally valid but unsupported new content form cannot be mistaken for a complete message.
-- Resolving reply candidates to a stable main-table message ID remains part of normalized message construction, not the wire parser.
+- Reply candidates are resolved by the conversation-scoped normalized record construction in ADR 0007, not by the wire parser.

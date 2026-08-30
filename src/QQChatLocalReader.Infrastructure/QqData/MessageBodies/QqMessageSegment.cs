@@ -16,6 +16,8 @@ public sealed class QqMessageSegment
 
     public string? EmojiText { get; init; }
 
+    public QqMediaMetadata? Media { get; init; }
+
     public QqReplyReference? Reply { get; init; }
 
     public override string ToString() => $"{nameof(QqMessageSegment)} {{ ContentType = {ContentType} }}";
