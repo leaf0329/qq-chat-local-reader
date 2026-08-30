@@ -16,3 +16,12 @@ Observed on 2026-08-30 from the current Windows QQ installation. No account iden
 - The WAL has a standard SQLite WAL magic value, declares a 4096-byte page size, and its frames are aligned to `24 + 4096` bytes.
 
 These observations identify candidate layout rules only. A version adapter is accepted only after a point-in-time snapshot decrypts successfully, exposes the required schema, matches the selected account, and passes database integrity checks.
+
+## Validated read chain
+
+- A self-contained elevated helper created and cleaned a real VSS snapshot while QQ remained running.
+- The read-only process scanner found a candidate that passed the required SQLCipher profile, both required table checks, `cipher_integrity_check`, and SQLite `quick_check`.
+- The decrypted snapshot exposed 31 tables. The two message tables use numeric column identifiers.
+- Clean-room field mapping was cross-checked against the published `QQBackup/nt_msg_db_util` schema research, whose GPL-3.0 source code is not copied or linked into this project.
+- Local value-domain checks confirmed `40030` as the stable peer/group QQ identifier, `40013` as direction, `40033` as the actual sender QQ, `40050` as the Unix timestamp, and `40001` as the message-table primary key for this version.
+- Database ownership was proven by matching the account directory identifier to sender `40033` on a self-direction row. Both configured local acceptance conversation types were found by exact stable identifier; their identifiers and names were not recorded.

@@ -24,6 +24,8 @@ public sealed record ConversationDescriptor
 
     public string StableKey => $"{AccountId}:{(int)Type}:{Id}";
 
+    public override string ToString() => $"{nameof(ConversationDescriptor)} {{ Type = {Type} }}";
+
     private static string RequireValue(string value, string parameterName) =>
         string.IsNullOrWhiteSpace(value)
             ? throw new ArgumentException("Value cannot be empty.", parameterName)

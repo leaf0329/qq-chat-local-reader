@@ -12,6 +12,8 @@ public sealed record AccountDescriptor
 
     public string DisplayName { get; }
 
+    public override string ToString() => $"{nameof(AccountDescriptor)} {{ sensitive values omitted }}";
+
     private static string RequireValue(string value, string parameterName) =>
         string.IsNullOrWhiteSpace(value)
             ? throw new ArgumentException("Value cannot be empty.", parameterName)

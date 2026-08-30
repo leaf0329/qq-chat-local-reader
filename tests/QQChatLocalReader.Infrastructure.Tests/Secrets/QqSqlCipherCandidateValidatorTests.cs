@@ -50,6 +50,13 @@ public sealed class QqSqlCipherCandidateValidatorTests : IDisposable
         var resolver = new QqDatabaseKeyResolver(new FakeKeyCandidateScanner(wrongKey, correctKey));
         var resolvedKey = resolver.Resolve(123, prepared);
         Assert.True(resolvedKey.Use(candidate => candidate.SequenceEqual(correctKey)));
+        var schema = QqDatabaseSchemaReader.Read(prepared, resolvedKey);
+        var c2cTable = Assert.Single(schema.Tables, table => table.Name == "c2c_msg_table");
+        var idColumn = Assert.Single(c2cTable.Columns);
+        Assert.Equal("id", idColumn.Name);
+        Assert.Equal("INTEGER", idColumn.DeclaredType);
+        Assert.Equal(1, idColumn.PrimaryKeyOrder);
+        Assert.DoesNotContain("c2c_msg_table", c2cTable.ToString(), StringComparison.Ordinal);
         resolvedKey.Dispose();
         Assert.Throws<ObjectDisposedException>(() => resolvedKey.Use(_ => true));
     }
