@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QQChatLocalReader.Core.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QQChatLocalReader.Infrastructure.Tests", "tests\QQChatLocalReader.Infrastructure.Tests\QQChatLocalReader.Infrastructure.Tests.csproj", "{86E102CE-CDEA-4836-BF8C-B6DEDDAECB14}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QQChatLocalReader.SnapshotHelper", "src\QQChatLocalReader.SnapshotHelper\QQChatLocalReader.SnapshotHelper.csproj", "{939D0065-0453-405C-9C81-83BBD1FFE92D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,6 +89,18 @@ Global
 		{86E102CE-CDEA-4836-BF8C-B6DEDDAECB14}.Release|x64.Build.0 = Release|Any CPU
 		{86E102CE-CDEA-4836-BF8C-B6DEDDAECB14}.Release|x86.ActiveCfg = Release|Any CPU
 		{86E102CE-CDEA-4836-BF8C-B6DEDDAECB14}.Release|x86.Build.0 = Release|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Debug|x64.Build.0 = Debug|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Debug|x86.Build.0 = Debug|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Release|x64.ActiveCfg = Release|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Release|x64.Build.0 = Release|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Release|x86.ActiveCfg = Release|Any CPU
+		{939D0065-0453-405C-9C81-83BBD1FFE92D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -97,5 +111,6 @@ Global
 		{0D5E8B30-4C77-4263-8C4A-3F4A144236DE} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{2D91C922-C72A-400B-A237-BF3AA8FDDE8C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{86E102CE-CDEA-4836-BF8C-B6DEDDAECB14} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{939D0065-0453-405C-9C81-83BBD1FFE92D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
