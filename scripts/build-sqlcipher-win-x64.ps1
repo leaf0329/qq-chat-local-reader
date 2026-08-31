@@ -69,8 +69,14 @@ Get-PinnedRepository -Url 'https://github.com/microsoft/vcpkg.git' -Commit $vcpk
 
 $vcpkgExe = Join-Path $vcpkgRoot 'vcpkg.exe'
 if (-not (Test-Path -LiteralPath $vcpkgExe -PathType Leaf)) {
-    $bootstrapOutput = @(& (Join-Path $vcpkgRoot 'bootstrap-vcpkg.bat') -disableMetrics 2>&1)
-    $bootstrapExitCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Continue'
+    try {
+        $bootstrapOutput = @(& (Join-Path $vcpkgRoot 'bootstrap-vcpkg.bat') -disableMetrics 2>&1)
+        $bootstrapExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = 'Stop'
+    }
     $bootstrapOutput | Write-Output
     if ($bootstrapExitCode -ne 0) {
         $bootstrapDetail = (($bootstrapOutput | Select-Object -Last 16) -join "`n")
@@ -80,8 +86,14 @@ if (-not (Test-Path -LiteralPath $vcpkgExe -PathType Leaf)) {
     }
 }
 
-$vcpkgOutput = @(& $vcpkgExe install "openssl:$triplet" --clean-after-build --disable-metrics 2>&1)
-$vcpkgExitCode = $LASTEXITCODE
+$ErrorActionPreference = 'Continue'
+try {
+    $vcpkgOutput = @(& $vcpkgExe install "openssl:$triplet" --clean-after-build --disable-metrics 2>&1)
+    $vcpkgExitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = 'Stop'
+}
 $vcpkgOutput | Write-Output
 if ($vcpkgExitCode -ne 0) {
     $vcpkgDetail = (($vcpkgOutput | Select-Object -Last 16) -join "`n")
@@ -125,8 +137,14 @@ $commandLines = @(
     "nmake /nologo /f Makefile.msc sqlite3.dll USE_NATIVE_LIBPATHS=1 PLATFORM=x64 `"OPTS=$nmakeOptions`" `"LTLIBS=$linkLibraries`" || exit /b 1"
 )
 [System.IO.File]::WriteAllLines($buildCommandPath, $commandLines, [System.Text.Encoding]::ASCII)
-$nativeBuildOutput = @(& cmd.exe /d /c $buildCommandPath 2>&1)
-$nativeBuildExitCode = $LASTEXITCODE
+$ErrorActionPreference = 'Continue'
+try {
+    $nativeBuildOutput = @(& cmd.exe /d /c $buildCommandPath 2>&1)
+    $nativeBuildExitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = 'Stop'
+}
 $nativeBuildOutput | Write-Output
 if ($nativeBuildExitCode -ne 0) {
     $failureDetail = (($nativeBuildOutput | Select-Object -Last 16) -join "`n")
