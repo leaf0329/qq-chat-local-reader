@@ -132,6 +132,141 @@ public sealed class EncryptedMessageIndex : IDisposable
         return messages;
     }
 
+    public MessageSearchPage SearchMessages(MessageSearchRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var cursor = request.Cursor is null ? null : MessageSearchCursor.Decode(request.Cursor);
+        using var connection = OpenConnection(readOnly: true);
+        using var command = connection.CreateCommand();
+        var conversationPredicates = new List<string>();
+        for (var index = 0; index < request.Conversations.Count; index++)
+        {
+            conversationPredicates.Add($"(message.conversation_type = $type{index} AND message.conversation_id = $id{index})");
+            command.Parameters.AddWithValue($"$type{index}", (int)request.Conversations[index].Type);
+            command.Parameters.AddWithValue($"$id{index}", request.Conversations[index].Id);
+        }
+
+        var cursorPredicate = cursor is null
+            ? string.Empty
+            :
+                """
+                  AND (
+                        message.timestamp_utc > $cursorTime
+                     OR (message.timestamp_utc = $cursorTime AND message.conversation_type > $cursorType)
+                     OR (message.timestamp_utc = $cursorTime AND message.conversation_type = $cursorType AND message.conversation_id > $cursorConversation)
+                     OR (message.timestamp_utc = $cursorTime AND message.conversation_type = $cursorType AND message.conversation_id = $cursorConversation AND message.message_id > $cursorMessage)
+                  )
+                """;
+        var keywordPredicate = request.Keyword is null
+            ? string.Empty
+            :
+                """
+                  AND EXISTS (
+                      SELECT 1
+                      FROM message_text_segments AS segment
+                      WHERE segment.account_id = message.account_id
+                        AND segment.conversation_type = message.conversation_type
+                        AND segment.conversation_id = message.conversation_id
+                        AND segment.message_id = message.message_id
+                        AND instr(lower(segment.text_content), lower($keyword)) > 0
+                  )
+                """;
+        var senderPredicate = request.SenderId is null
+            ? string.Empty
+            : " AND message.sender_id = $senderId";
+        command.CommandText =
+            $"""
+            SELECT message.message_id, message.timestamp_utc, message.direction,
+                   message.sender_id, message.sender_display_name, message.body_json,
+                   message.conversation_type, message.conversation_id, conversation.display_name
+            FROM messages AS message
+            INNER JOIN conversations AS conversation
+                ON conversation.account_id = message.account_id
+               AND conversation.conversation_type = message.conversation_type
+               AND conversation.conversation_id = message.conversation_id
+            WHERE message.account_id = $accountId
+              AND ({string.Join(" OR ", conversationPredicates)})
+              AND message.timestamp_utc >= $startTime
+              AND message.timestamp_utc < $endTime
+              {senderPredicate}
+              {keywordPredicate}
+              {cursorPredicate}
+            ORDER BY message.timestamp_utc, message.conversation_type,
+                     message.conversation_id, message.message_id
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$accountId", request.AccountId);
+        command.Parameters.AddWithValue("$startTime", request.Range.StartUtc.ToUnixTimeSeconds());
+        command.Parameters.AddWithValue("$endTime", request.Range.EndUtc.ToUnixTimeSeconds());
+        command.Parameters.AddWithValue("$limit", request.PageSize + 1);
+        if (request.Keyword is not null)
+        {
+            command.Parameters.AddWithValue("$keyword", request.Keyword);
+        }
+
+        if (request.SenderId is not null)
+        {
+            command.Parameters.AddWithValue("$senderId", request.SenderId);
+        }
+
+        if (cursor is not null)
+        {
+            command.Parameters.AddWithValue("$cursorTime", cursor.Timestamp);
+            command.Parameters.AddWithValue("$cursorType", cursor.ConversationType);
+            command.Parameters.AddWithValue("$cursorConversation", cursor.ConversationId);
+            command.Parameters.AddWithValue("$cursorMessage", cursor.MessageId);
+        }
+
+        var rows = ReadRows(command);
+        var hasNextPage = rows.Count > request.PageSize;
+        if (hasNextPage)
+        {
+            rows.RemoveAt(rows.Count - 1);
+        }
+
+        var messages = rows.Select(row => Materialize(connection, request.AccountId, row)).ToArray();
+        var last = hasNextPage ? rows[^1] : null;
+        return new MessageSearchPage(
+            messages,
+            last is null
+                ? null
+                : new MessageSearchCursor(
+                    last.Timestamp,
+                    last.ConversationType,
+                    last.ConversationId,
+                    last.MessageId).Encode());
+    }
+
+    public MessageContext ReadContext(
+        ConversationDescriptor conversation,
+        string messageId,
+        int before = 20,
+        int after = 20)
+    {
+        ArgumentNullException.ThrowIfNull(conversation);
+        ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+        if (before is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(before));
+        }
+
+        if (after is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(after));
+        }
+
+        using var connection = OpenConnection(readOnly: true);
+        var anchor = ReadAnchor(connection, conversation, messageId) ??
+            throw new KeyNotFoundException("The requested indexed message was not found.");
+        var previous = ReadContextRows(connection, conversation, anchor, before, beforeAnchor: true);
+        previous.Reverse();
+        var following = ReadContextRows(connection, conversation, anchor, after, beforeAnchor: false);
+        var rows = previous.Append(anchor).Concat(following).ToArray();
+        return new MessageContext(
+            rows.Select(row => Materialize(connection, conversation.AccountId, row)).ToArray(),
+            previous.Count);
+    }
+
     public void Dispose()
     {
         Interlocked.Exchange(ref key, null)?.Dispose();
@@ -397,6 +532,157 @@ public sealed class EncryptedMessageIndex : IDisposable
         }
     }
 
+    private static IndexedRow? ReadAnchor(
+        SqliteConnection connection,
+        ConversationDescriptor conversation,
+        string messageId)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT message.message_id, message.timestamp_utc, message.direction,
+                   message.sender_id, message.sender_display_name, message.body_json,
+                   message.conversation_type, message.conversation_id, conversation.display_name
+            FROM messages AS message
+            INNER JOIN conversations AS conversation
+                ON conversation.account_id = message.account_id
+               AND conversation.conversation_type = message.conversation_type
+               AND conversation.conversation_id = message.conversation_id
+            WHERE message.account_id = $accountId
+              AND message.conversation_type = $conversationType
+              AND message.conversation_id = $conversationId
+              AND message.message_id = $messageId;
+            """;
+        command.Parameters.AddWithValue("$accountId", conversation.AccountId);
+        command.Parameters.AddWithValue("$conversationType", (int)conversation.Type);
+        command.Parameters.AddWithValue("$conversationId", conversation.Id);
+        command.Parameters.AddWithValue("$messageId", messageId);
+        return ReadRows(command).SingleOrDefault();
+    }
+
+    private static List<IndexedRow> ReadContextRows(
+        SqliteConnection connection,
+        ConversationDescriptor conversation,
+        IndexedRow anchor,
+        int limit,
+        bool beforeAnchor)
+    {
+        if (limit == 0)
+        {
+            return [];
+        }
+
+        var comparison = beforeAnchor ? "<" : ">";
+        var order = beforeAnchor ? "DESC" : "ASC";
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            $"""
+            SELECT message.message_id, message.timestamp_utc, message.direction,
+                   message.sender_id, message.sender_display_name, message.body_json,
+                   message.conversation_type, message.conversation_id, conversation.display_name
+            FROM messages AS message
+            INNER JOIN conversations AS conversation
+                ON conversation.account_id = message.account_id
+               AND conversation.conversation_type = message.conversation_type
+               AND conversation.conversation_id = message.conversation_id
+            WHERE message.account_id = $accountId
+              AND message.conversation_type = $conversationType
+              AND message.conversation_id = $conversationId
+              AND (
+                    message.timestamp_utc {comparison} $anchorTime
+                 OR (message.timestamp_utc = $anchorTime AND message.message_id {comparison} $anchorMessage)
+              )
+            ORDER BY message.timestamp_utc {order}, message.message_id {order}
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$accountId", conversation.AccountId);
+        command.Parameters.AddWithValue("$conversationType", (int)conversation.Type);
+        command.Parameters.AddWithValue("$conversationId", conversation.Id);
+        command.Parameters.AddWithValue("$anchorTime", anchor.Timestamp);
+        command.Parameters.AddWithValue("$anchorMessage", anchor.MessageId);
+        command.Parameters.AddWithValue("$limit", limit);
+        return ReadRows(command);
+    }
+
+    private static List<IndexedRow> ReadRows(SqliteCommand command)
+    {
+        using var reader = command.ExecuteReader();
+        var rows = new List<IndexedRow>();
+        while (reader.Read())
+        {
+            rows.Add(new IndexedRow
+            {
+                MessageId = reader.GetString(0),
+                Timestamp = reader.GetInt64(1),
+                Direction = reader.GetInt32(2),
+                SenderId = reader.GetString(3),
+                SenderDisplayName = reader.IsDBNull(4) ? null : reader.GetString(4),
+                BodyJson = reader.IsDBNull(5) ? null : reader.GetString(5),
+                ConversationType = reader.GetInt32(6),
+                ConversationId = reader.GetString(7),
+                ConversationDisplayName = reader.GetString(8),
+            });
+        }
+
+        return rows;
+    }
+
+    private static QqMessageRecord Materialize(
+        SqliteConnection connection,
+        string accountId,
+        IndexedRow row)
+    {
+        var conversation = new ConversationDescriptor(
+            accountId,
+            (ConversationType)row.ConversationType,
+            row.ConversationId,
+            row.ConversationDisplayName);
+        return new QqMessageRecord
+        {
+            AccountId = accountId,
+            ConversationType = conversation.Type,
+            ConversationId = conversation.Id,
+            ConversationDisplayName = conversation.DisplayName,
+            StableMessageId = row.MessageId,
+            TimestampUtc = DateTimeOffset.FromUnixTimeSeconds(row.Timestamp),
+            RawDirection = row.Direction,
+            SenderId = row.SenderId,
+            SenderDisplayName = row.SenderDisplayName,
+            Body = row.BodyJson is null ? null : DeserializeBody(row.BodyJson),
+            ReplyTargetMessageIds = ReadReplyTargets(connection, conversation, row.MessageId),
+        };
+    }
+
+    private static List<string> ReadReplyTargets(
+        SqliteConnection connection,
+        ConversationDescriptor conversation,
+        string messageId)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT target_message_id
+            FROM reply_targets
+            WHERE account_id = $accountId
+              AND conversation_type = $conversationType
+              AND conversation_id = $conversationId
+              AND message_id = $messageId
+            ORDER BY target_message_id;
+            """;
+        command.Parameters.AddWithValue("$accountId", conversation.AccountId);
+        command.Parameters.AddWithValue("$conversationType", (int)conversation.Type);
+        command.Parameters.AddWithValue("$conversationId", conversation.Id);
+        command.Parameters.AddWithValue("$messageId", messageId);
+        using var reader = command.ExecuteReader();
+        var targets = new List<string>();
+        while (reader.Read())
+        {
+            targets.Add(reader.GetString(0));
+        }
+
+        return targets;
+    }
+
     private static void Validate(QqMessageRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -478,5 +764,26 @@ public sealed class EncryptedMessageIndex : IDisposable
         {
             throw new InvalidDataException("The encrypted message index failed its integrity check.");
         }
+    }
+
+    private sealed class IndexedRow
+    {
+        public required string MessageId { get; init; }
+
+        public required long Timestamp { get; init; }
+
+        public required int Direction { get; init; }
+
+        public required string SenderId { get; init; }
+
+        public string? SenderDisplayName { get; init; }
+
+        public string? BodyJson { get; init; }
+
+        public required int ConversationType { get; init; }
+
+        public required string ConversationId { get; init; }
+
+        public required string ConversationDisplayName { get; init; }
     }
 }

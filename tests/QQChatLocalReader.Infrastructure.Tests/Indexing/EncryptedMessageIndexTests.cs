@@ -94,6 +94,44 @@ public sealed class EncryptedMessageIndexTests : IDisposable
         Assert.Equal(originalLength, new FileInfo(databasePath).Length);
     }
 
+    [Fact]
+    public void SearchUsesExplicitScopeFiltersAndStableCursor()
+    {
+        var group = new ConversationDescriptor("10001", ConversationType.Group, "30003", "Masked group");
+        var peer = new ConversationDescriptor("10001", ConversationType.Private, "20002", "Masked peer");
+        using var index = EncryptedMessageIndex.Open(testRoot);
+        index.UpsertMessages([
+            CreateSearchMessage(group, "1", 1_700_000_000, "alpha", "70001"),
+            CreateSearchMessage(group, "2", 1_700_000_001, "中文关键词一", "70002"),
+            CreateSearchMessage(peer, "3", 1_700_000_002, "中文关键词二", "70002"),
+            CreateSearchMessage(group, "4", 1_700_000_003, "中文关键词三", "70002"),
+        ]);
+        var range = new TimeRange(
+            DateTimeOffset.FromUnixTimeSeconds(1_699_999_999),
+            DateTimeOffset.FromUnixTimeSeconds(1_700_000_010));
+
+        var firstPage = index.SearchMessages(new MessageSearchRequest(
+            "10001", [group, peer], range, keyword: "中文关键词", pageSize: 2));
+
+        Assert.Equal(["2", "3"], firstPage.Messages.Select(message => message.StableMessageId));
+        Assert.NotNull(firstPage.NextCursor);
+        var secondPage = index.SearchMessages(new MessageSearchRequest(
+            "10001", [group, peer], range, keyword: "中文关键词", pageSize: 2, cursor: firstPage.NextCursor));
+        Assert.Equal(["4"], secondPage.Messages.Select(message => message.StableMessageId));
+        Assert.Null(secondPage.NextCursor);
+
+        var senderResult = index.SearchMessages(new MessageSearchRequest(
+            "10001", [group], range, senderId: "70001"));
+        Assert.Equal(["1"], senderResult.Messages.Select(message => message.StableMessageId));
+        Assert.Throws<ArgumentException>(() => index.SearchMessages(new MessageSearchRequest(
+            "10001", [group], range, cursor: "not-a-cursor")));
+
+        var context = index.ReadContext(group, "2", before: 1, after: 2);
+        Assert.Equal(1, context.AnchorIndex);
+        Assert.Equal(["1", "2", "4"], context.Messages.Select(message => message.StableMessageId));
+        Assert.Throws<ArgumentOutOfRangeException>(() => index.ReadContext(group, "2", before: 101));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(testRoot))
@@ -131,5 +169,27 @@ public sealed class EncryptedMessageIndexTests : IDisposable
         Reply = depth == 0
             ? new QqReplyReference { Summary = "end" }
             : new QqReplyReference { EmbeddedContent = CreateDeepSegment(depth - 1) },
+    };
+
+    private static QqMessageRecord CreateSearchMessage(
+        ConversationDescriptor conversation,
+        string messageId,
+        long timestamp,
+        string text,
+        string senderId) => new()
+    {
+        AccountId = conversation.AccountId,
+        ConversationType = conversation.Type,
+        ConversationId = conversation.Id,
+        ConversationDisplayName = conversation.DisplayName,
+        StableMessageId = messageId,
+        TimestampUtc = DateTimeOffset.FromUnixTimeSeconds(timestamp),
+        RawDirection = 0,
+        SenderId = senderId,
+        SenderDisplayName = "Masked sender",
+        Body = new QqMessageBody(
+            QqMessageBodyParseStatus.Complete,
+            [new QqMessageSegment { RawContentType = (int)QqMessageContentType.Text, Text = text }],
+            0),
     };
 }
