@@ -66,7 +66,7 @@ begin
   DeleteLocalDataCheckBox.Top := UninstallProgressForm.StatusLabel.Top + UninstallProgressForm.StatusLabel.Height + ScaleY(20);
   DeleteLocalDataCheckBox.Width := UninstallProgressForm.InnerPage.ClientWidth;
   DeleteLocalDataCheckBox.Caption := '同时删除本地聊天索引和信任配置';
-  DeleteLocalDataCheckBox.Checked := True;
+  DeleteLocalDataCheckBox.Checked := False;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

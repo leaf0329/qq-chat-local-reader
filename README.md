@@ -35,7 +35,7 @@ QQ Chat Local Reader 是一个面向 Windows QQ NT 的本地聊天记录读取�
 
 仓库目前已完成 QQ 9.9.33 严格适配器、同一次 VSS 快照中的消息与群资料读取、文本/表情/引用/媒体元数据解析、DPAPI + SQLCipher 加密索引、分页搜索与上下文、Markdown/JSON/CSV 安全导出、持久化后台同步任务，以及共用这些能力的简体中文 WPF、中文 CLI 和本地 STDIO MCP。MCP 提供 11 个有界工具并已通过真实协议握手；同步支持 120 秒本地确认，以及按独立 DPAPI 配置选择“拒绝 / 仅本次允许 / 信任此注册并允许”。
 
-`scripts/build-release.ps1` 可生成无需预装 .NET 的 win-x64 便携 ZIP；Inno Setup 脚本提供按当前用户安装、可选官方 Codex MCP 注册和安全卸载。标签发布流水线从固定提交构建 SQLCipher/OpenSSL，生成 ZIP、安装器、SHA-256 清单、第三方许可、原生构建来源说明和 GitHub 构建来源证明。当前仍属于预发布阶段；每个公开版本都必须通过自动化测试、真实受支持 QQ 会话验收、便携版/安装版冒烟测试和隐私扫描。测试版暂不提供 Authenticode 签名，Windows 可能显示未知发布者或 SmartScreen 提示。
+`scripts/build-release.ps1` 可生成无需预装 .NET 的 win-x64 便携 ZIP；Inno Setup 脚本提供按当前用户安装、可选官方 Codex MCP 注册和安全卸载。卸载时默认保留本地索引和 MCP 信任配置，只有用户明确勾选后才删除。标签发布流水线从固定提交构建 SQLCipher/OpenSSL，生成 ZIP、安装器、SHA-256 清单、第三方许可、原生构建来源说明和 GitHub 构建来源证明。当前仍属于预发布阶段；每个公开版本都必须通过自动化测试、真实受支持 QQ 会话验收、便携版/安装版冒烟测试和隐私扫描。测试版暂不提供 Authenticode 签名，Windows 可能显示未知发布者或 SmartScreen 提示。
 
 ## 许可证
 
