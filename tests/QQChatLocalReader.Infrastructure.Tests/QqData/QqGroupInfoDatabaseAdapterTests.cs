@@ -36,7 +36,7 @@ public sealed class QqGroupInfoDatabaseAdapterTests : IDisposable
 
     private static void CreateDatabase(string path, byte[] key)
     {
-        SQLitePCL.Batteries_V2.Init();
+        SqlCipherRuntime.Initialize();
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = path,

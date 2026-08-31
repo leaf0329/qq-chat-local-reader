@@ -41,4 +41,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
-          gh release create '${{ github.ref_name }}' "artifacts/$version/qq-chat-local-reader-$version-win-x64-portable.zip" "artifacts/$version/qq-chat-local-reader-$version-win-x64-setup.exe" "artifacts/$version/SHA256SUMS.txt" --verify-tag --generate-notes --title "QQ Chat Local Reader $version"
+          $releaseKind = if ($version.Contains('-')) { '--prerelease' } else { '--latest' }
+          gh release create '${{ github.ref_name }}' "artifacts/$version/qq-chat-local-reader-$version-win-x64-portable.zip" "artifacts/$version/qq-chat-local-reader-$version-win-x64-setup.exe" "artifacts/$version/SHA256SUMS.txt" --verify-tag --generate-notes --title "QQ Chat Local Reader $version" $releaseKind

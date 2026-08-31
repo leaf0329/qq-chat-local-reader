@@ -7,7 +7,10 @@ param(
     [string]$DotnetPath = 'dotnet',
 
     [Parameter(Mandatory = $false)]
-    [string]$InnoCompilerPath
+    [string]$InnoCompilerPath,
+
+    [Parameter(Mandatory = $false)]
+    [string]$NativeSqlCipherPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,13 +29,22 @@ $portableRoot = Join-Path $releaseRoot 'portable'
 $helperRoot = Join-Path $releaseRoot 'snapshot-helper'
 New-Item -ItemType Directory -Path $portableRoot,$helperRoot -Force | Out-Null
 
-& $DotnetPath test (Join-Path $repositoryRoot 'QQChatLocalReader.sln') -c Release
+if ([string]::IsNullOrWhiteSpace($NativeSqlCipherPath)) {
+    $NativeSqlCipherPath = & (Join-Path $PSScriptRoot 'build-sqlcipher-win-x64.ps1') | Select-Object -Last 1
+}
+$NativeSqlCipherPath = [System.IO.Path]::GetFullPath($NativeSqlCipherPath)
+if (-not (Test-Path -LiteralPath $NativeSqlCipherPath -PathType Leaf)) { throw 'The required SQLCipher native library was not built.' }
+$nativeRoot = Split-Path -Parent $NativeSqlCipherPath
+$nativeLicenses = Join-Path $nativeRoot 'licenses'
+$nativeProvenance = Join-Path $nativeRoot 'BUILD-PROVENANCE.txt'
+
+& $DotnetPath test (Join-Path $repositoryRoot 'QQChatLocalReader.sln') -c Release -p:NativeSqlCipherPath=$NativeSqlCipherPath
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 
-& $DotnetPath publish (Join-Path $repositoryRoot 'src\QQChatLocalReader.App\QQChatLocalReader.App.csproj') -c Release -r win-x64 --self-contained true -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false -o $portableRoot
+& $DotnetPath publish (Join-Path $repositoryRoot 'src\QQChatLocalReader.App\QQChatLocalReader.App.csproj') -c Release -r win-x64 --self-contained true -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false -p:NativeSqlCipherPath=$NativeSqlCipherPath -o $portableRoot
 if ($LASTEXITCODE -ne 0) { throw 'Main application publish failed.' }
 
-& $DotnetPath publish (Join-Path $repositoryRoot 'src\QQChatLocalReader.SnapshotHelper\QQChatLocalReader.SnapshotHelper.csproj') -c Release -r win-x64 --self-contained true -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false -o $helperRoot
+& $DotnetPath publish (Join-Path $repositoryRoot 'src\QQChatLocalReader.SnapshotHelper\QQChatLocalReader.SnapshotHelper.csproj') -c Release -r win-x64 --self-contained true -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false -p:NativeSqlCipherPath=$NativeSqlCipherPath -o $helperRoot
 if ($LASTEXITCODE -ne 0) { throw 'Snapshot helper publish failed.' }
 
 Copy-Item -LiteralPath (Join-Path $helperRoot 'QQChatLocalReader.SnapshotHelper.exe') -Destination $portableRoot
@@ -40,6 +52,11 @@ Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') -Destination $porta
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'README.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'PRIVACY.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'THIRD-PARTY-NOTICES.md') -Destination $portableRoot
+Copy-Item -LiteralPath $nativeLicenses -Destination (Join-Path $portableRoot 'THIRD-PARTY-LICENSES') -Recurse
+Copy-Item -LiteralPath $nativeProvenance -Destination $portableRoot
+
+if (Test-Path -LiteralPath (Join-Path $portableRoot 'e_sqlcipher.dll')) { throw 'Legacy e_sqlcipher.dll must not be distributed.' }
+if (-not (Test-Path -LiteralPath (Join-Path $portableRoot 'sqlcipher.dll') -PathType Leaf)) { throw 'sqlcipher.dll is missing from the portable distribution.' }
 
 $zipPath = Join-Path $releaseRoot "qq-chat-local-reader-$Version-win-x64-portable.zip"
 Compress-Archive -Path (Join-Path $portableRoot '*') -DestinationPath $zipPath -CompressionLevel Optimal

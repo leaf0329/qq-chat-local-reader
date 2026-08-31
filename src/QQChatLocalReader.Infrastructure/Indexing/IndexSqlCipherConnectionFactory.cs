@@ -9,7 +9,7 @@ internal static class IndexSqlCipherConnectionFactory
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentNullException.ThrowIfNull(key);
-        SQLitePCL.Batteries_V2.Init();
+        SqlCipherRuntime.Initialize();
 
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {

@@ -10,7 +10,7 @@ public static class QqSqlCipherCandidateValidator
 
     static QqSqlCipherCandidateValidator()
     {
-        SQLitePCL.Batteries_V2.Init();
+        SqlCipherRuntime.Initialize();
     }
 
     public static bool IsCandidateValid(

@@ -377,31 +377,17 @@
         "resolved": "13.0.3",
         "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
       },
-      "SQLitePCLRaw.bundle_e_sqlcipher": {
-        "type": "Transitive",
-        "resolved": "2.1.11",
-        "contentHash": "NFuxa/rD3Ah88jbFOgsoUjuWcLiBkj3iqgO2gJXola9NtjtCTRI3HMQtVjQDnrhCvdBOAJ4RqbwnqoEMLht8GQ==",
-        "dependencies": {
-          "SQLitePCLRaw.lib.e_sqlcipher": "2.1.11",
-          "SQLitePCLRaw.provider.e_sqlcipher": "2.1.11"
-        }
-      },
       "SQLitePCLRaw.core": {
         "type": "Transitive",
-        "resolved": "2.1.12",
-        "contentHash": "ETpNw9DY3ckWLgRRAeCHj+GKOuPi61aeczkXhgHexUvqoZBAYg8RYESE2J7O1M7+o6QbdSEZwrw9bfqztUVWXg=="
+        "resolved": "3.0.5",
+        "contentHash": "k81AYXXRCw3Zj8rOhyBoCsx/U97KYDFI2CSKr/ijl5BwpsW/hX/4kBiDmerFaoust8nxBwa0IHQFw8MmSHRtnQ=="
       },
-      "SQLitePCLRaw.lib.e_sqlcipher": {
+      "SQLitePCLRaw.provider.sqlcipher": {
         "type": "Transitive",
-        "resolved": "2.1.11",
-        "contentHash": "Cg6UPeDbH8jyaOs1vqXYIgeewH0wYrBnmbC5Ml3GYBo+GKzNmyxrWSO52JV68bfB7Addt/PZLMekJV1RH2ftWQ=="
-      },
-      "SQLitePCLRaw.provider.e_sqlcipher": {
-        "type": "Transitive",
-        "resolved": "2.1.11",
-        "contentHash": "5L7YXWtPzKYHeXBHmj63QsHbLQmy0SYvhQp3xWA2yzSq1SvlnGFViveLfUDr/GEmePrqzXQ9tOJG9iQnFspfBA==",
+        "resolved": "3.0.5",
+        "contentHash": "o67jVSKN7aUm7bDg3nfia+VPEbHmNe9XVhVm/0f+9NmUofyFLfEnJv2jJ/UpHcitycWrjctepl1pwO7JUD4qAA==",
         "dependencies": {
-          "SQLitePCLRaw.core": "2.1.11"
+          "SQLitePCLRaw.core": "3.0.5"
         }
       },
       "System.CodeDom": {
@@ -485,7 +471,7 @@
           "Google.Protobuf": "[3.36.0, )",
           "Microsoft.Data.Sqlite.Core": "[10.0.11, )",
           "QQChatLocalReader.Core": "[1.0.0, )",
-          "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
+          "SQLitePCLRaw.provider.sqlcipher": "[3.0.5, )",
           "System.Management": "[10.0.11, )",
           "System.Security.Cryptography.ProtectedData": "[10.0.11, )"
         }

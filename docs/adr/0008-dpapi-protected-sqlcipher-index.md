@@ -1,6 +1,6 @@
 # ADR 0008: DPAPI-protected SQLCipher message index
 
-- Status: Accepted for development; native SQLCipher packaging requires release review
+- Status: Accepted
 - Date: 2026-08-30
 
 ## Context
@@ -19,7 +19,7 @@ Use SQLCipher with an explicitly verified version-4 profile: 4096-byte pages, 25
 
 Store messages under the composite key `(account, conversation type, conversation ID, stable message ID)`. A batch uses one immediate serializable SQLite transaction. Upsert the current observation, replace its ordered text segments and reply targets, and commit only after every record succeeds. The full normalized body is retained as encrypted structured JSON so media and reply metadata round-trip without inventing another lossy schema; ordered text is also stored relationally for the upcoming search layer.
 
-`SQLitePCLRaw.bundle_e_sqlcipher` 2.1.11 is reused from the existing QQ decryption chain, but NuGet now marks this package as legacy and unmaintained. It is acceptable for the current development baseline because resolved binaries are pinned and real acceptance passes. A maintained replacement or a reproducible, reviewed native SQLCipher build is a release blocker; silently floating to an unknown native binary is not acceptable.
+Use the maintained `SQLitePCLRaw.provider.sqlcipher` 3.0.5 managed provider. Supply `sqlcipher.dll` from the reviewed, pinned source-build process in ADR 0017; the provider package intentionally contains no native binary. The release build rejects the legacy `e_sqlcipher.dll` filename and fails if the new native library or its notices are missing.
 
 ## Consequences
 
@@ -28,4 +28,4 @@ Store messages under the composite key `(account, conversation type, conversatio
 - Repeated reads are idempotent, and exceptions roll back the complete batch.
 - GUI, CLI, export, and MCP can share the same encrypted normalized store.
 - Moving an index to another Windows user profile does not make it portable; migration needs an explicit future export/import design.
-- The current native SQLCipher package must not pass the release gate without the documented dependency review.
+- Native SQLCipher, its crypto provider, build provenance, and required licenses are explicit release inputs rather than opaque transitive package contents.

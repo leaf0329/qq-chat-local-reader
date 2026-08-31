@@ -139,7 +139,7 @@ public sealed class QqSqlCipherCandidateValidatorTests : IDisposable
 
     private static SqliteConnection OpenNewEncryptedDatabase(string path, byte[] key)
     {
-        SQLitePCL.Batteries_V2.Init();
+        SqlCipherRuntime.Initialize();
         var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = path,

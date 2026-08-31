@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for pre-release builds
+Accepted
 
 ## Decision
 
@@ -16,7 +16,7 @@ Tagged builds run tests on GitHub's Windows runner, generate ZIP/setup/checksums
 
 ## Release gate
 
-The legacy SQLCipher native bundle remains a documented pre-release blocker. A stable release requires a maintained or reproducibly built native SQLCipher package plus complete binary license notices and Defender/SmartScreen acceptance results.
+The native dependency gate is satisfied by ADR 0017's pinned SQLCipher/OpenSSL source build and packaged license/provenance files. A release still requires automated tests, real supported-QQ acceptance, clean portable and installer smoke tests, and a privacy scan. Unsigned beta builds must be described as unsigned; Defender/SmartScreen results are recorded rather than implied to be equivalent to Authenticode signing.
 
 ## Sources
 

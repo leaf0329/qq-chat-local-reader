@@ -15,7 +15,9 @@ Reviewed on 2026-08-30. Repository metadata and license texts must be checked ag
 | `g122622/synthos` | MIT | Candidate for selective reuse after file-level provenance and dependency review; preserve copyright and license notices. |
 | `Google.Protobuf` 3.36.0 | BSD-3-Clause | Approved runtime dependency for bounded Protobuf wire decoding; include its copyright and license notice in distributed third-party notices. |
 | `System.Security.Cryptography.ProtectedData` 10.0.11 | MIT | Approved Windows DPAPI wrapper; include its license notice in distributed third-party notices. |
-| `SQLitePCLRaw.bundle_e_sqlcipher` 2.1.11 and native dependencies | Apache-2.0 / SQLCipher BSD-style terms | Development-only approval is recorded in ADR 0008. NuGet marks the bundle legacy and unmaintained; a maintained or reproducibly built replacement and complete binary notices are required before release. |
+| `SQLitePCLRaw.provider.sqlcipher` 3.0.5 | Apache-2.0 | Approved managed provider pinned by lock files. It imports a separately supplied `sqlcipher.dll` and does not include a native binary. |
+| SQLCipher Community 4.9.0 at `c7e811b399379c948b423872ad7ba91d2ce38434` | BSD-style terms | Approved for a reproducible Windows x64 source build. Preserve its exact license in binary distributions. |
+| OpenSSL resolved from vcpkg at `701d832d37ccc61ec86855927d71c55dd7f624dc` | Apache-2.0 | Approved as the statically linked SQLCipher crypto provider. Preserve its resolved copyright/license file in binary distributions. |
 | `ModelContextProtocol` 2.2.0 | Apache-2.0 | Official Tier 1 C# SDK used for the local STDIO MCP server. Include its license and transitive dependency notices in release artifacts. |
 
 ## Rules
@@ -39,4 +41,6 @@ Reviewed on 2026-08-30. Repository metadata and license texts must be checked ag
 - <https://github.com/g122622/synthos>
 - <https://www.nuget.org/packages/Google.Protobuf/3.36.0>
 - <https://www.nuget.org/packages/System.Security.Cryptography.ProtectedData/10.0.11>
-- <https://www.nuget.org/packages/SQLitePCLRaw.bundle_e_sqlcipher/2.1.11>
+- <https://www.nuget.org/packages/SQLitePCLRaw.provider.sqlcipher/3.0.5>
+- <https://github.com/sqlcipher/sqlcipher/tree/c7e811b399379c948b423872ad7ba91d2ce38434>
+- <https://github.com/microsoft/vcpkg/tree/701d832d37ccc61ec86855927d71c55dd7f624dc>

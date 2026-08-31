@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup Condition="'$(NativeSqlCipherPath)' != '' and Exists('$(NativeSqlCipherPath)') and ('$(MSBuildProjectName)' == 'QQChatLocalReader.App' or '$(MSBuildProjectName)' == 'QQChatLocalReader.SnapshotHelper' or '$(MSBuildProjectName)' == 'QQChatLocalReader.Infrastructure.Tests')">
+    <Content Include="$(NativeSqlCipherPath)" Link="sqlcipher.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
