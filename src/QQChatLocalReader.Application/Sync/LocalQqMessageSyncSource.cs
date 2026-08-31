@@ -6,13 +6,13 @@ using QQChatLocalReader.Infrastructure.SnapshotHelper;
 
 namespace QQChatLocalReader.Application.Sync;
 
-public sealed class LocalQqMessageSyncSource : IMessageSyncSource
+public sealed class LocalQqMessageSyncSource : IMessageSyncSource, ILocalQqCatalog
 {
-    private readonly ElevatedSnapshotClient snapshotClient;
+    private readonly string snapshotHelperExecutablePath;
 
     public LocalQqMessageSyncSource(string snapshotHelperExecutablePath)
     {
-        snapshotClient = new ElevatedSnapshotClient(snapshotHelperExecutablePath);
+        this.snapshotHelperExecutablePath = Path.GetFullPath(snapshotHelperExecutablePath);
     }
 
     public async Task<IReadOnlyList<QqMessageRecord>> ReadMessagesAsync(
@@ -20,16 +20,55 @@ public sealed class LocalQqMessageSyncSource : IMessageSyncSource
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        return await UseAdapterAsync(
+            request.AccountId,
+            adapter =>
+            {
+                var availableKeys = adapter.ListConversations()
+                    .Select(item => item.StableKey)
+                    .ToHashSet(StringComparer.Ordinal);
+                if (request.Conversations.Any(item => !availableKeys.Contains(item.StableKey)))
+                {
+                    throw new InvalidOperationException("A requested conversation is not present in the selected QQ account.");
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                return adapter.ReadMessages(request);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<AccountDescriptor>> ListAccountsAsync(CancellationToken cancellationToken)
+    {
+        var dataRoot = await QqUserDataConfiguration
+            .ReadDataRootAsync(cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return QqDatabaseDiscovery.Discover(dataRoot)
+            .Select(item => new AccountDescriptor(item.AccountId, item.AccountId))
+            .ToArray();
+    }
+
+    public Task<IReadOnlyList<ConversationDescriptor>> ListConversationsAsync(
+        string accountId,
+        CancellationToken cancellationToken) =>
+        UseAdapterAsync(accountId, adapter => adapter.ListConversations(), cancellationToken);
+
+    private async Task<T> UseAdapterAsync<T>(
+        string accountId,
+        Func<QqNtMessageDatabaseAdapter, T> action,
+        CancellationToken cancellationToken)
+    {
         var dataRoot = await QqUserDataConfiguration
             .ReadDataRootAsync(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var databaseSet = QqDatabaseDiscovery.Discover(dataRoot)
-            .SingleOrDefault(item => item.AccountId.Equals(request.AccountId, StringComparison.Ordinal)) ??
+            .SingleOrDefault(item => item.AccountId.Equals(accountId, StringComparison.Ordinal)) ??
             throw new InvalidOperationException("The selected QQ account database is unavailable.");
         var runtime = QqProcessDiscovery.Discover()
             .FirstOrDefault(item => item.Version.Equals(QqNtMessageDatabaseAdapter.SupportedVersion, StringComparison.Ordinal)) ??
             throw new InvalidOperationException("A supported running QQ process is unavailable.");
 
+        var snapshotClient = new ElevatedSnapshotClient(snapshotHelperExecutablePath);
         await using var snapshot = await snapshotClient
             .CreateAsync(databaseSet, cancellationToken)
             .ConfigureAwait(false);
@@ -43,15 +82,7 @@ public sealed class LocalQqMessageSyncSource : IMessageSyncSource
             databaseSet.AccountId,
             prepared,
             key);
-        var availableKeys = adapter.ListConversations()
-            .Select(item => item.StableKey)
-            .ToHashSet(StringComparer.Ordinal);
-        if (request.Conversations.Any(item => !availableKeys.Contains(item.StableKey)))
-        {
-            throw new InvalidOperationException("A requested conversation is not present in the selected QQ account.");
-        }
-
         cancellationToken.ThrowIfCancellationRequested();
-        return adapter.ReadMessages(request);
+        return action(adapter);
     }
 }

@@ -7,15 +7,18 @@ public sealed class ApplicationRuntime : IDisposable
 {
     private bool disposed;
 
-    private ApplicationRuntime(EncryptedMessageIndex index, SyncJobManager syncJobs)
+    private ApplicationRuntime(EncryptedMessageIndex index, SyncJobManager syncJobs, ILocalQqCatalog catalog)
     {
         Index = index;
         SyncJobs = syncJobs;
+        Catalog = catalog;
     }
 
     public EncryptedMessageIndex Index { get; }
 
     public SyncJobManager SyncJobs { get; }
+
+    public ILocalQqCatalog Catalog { get; }
 
     public static ApplicationRuntime OpenDefault(ISyncRequestAuthorizer? authorizer = null)
     {
@@ -23,11 +26,12 @@ public sealed class ApplicationRuntime : IDisposable
         try
         {
             var helperPath = Path.Combine(AppContext.BaseDirectory, "QQChatLocalReader.SnapshotHelper.exe");
+            var source = new LocalQqMessageSyncSource(helperPath);
             var jobs = new SyncJobManager(
-                new LocalQqMessageSyncSource(helperPath),
+                source,
                 authorizer ?? ExplicitRequestAuthorizer.Instance,
                 index);
-            return new ApplicationRuntime(index, jobs);
+            return new ApplicationRuntime(index, jobs, source);
         }
         catch
         {

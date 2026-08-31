@@ -3,7 +3,7 @@ using QQChatLocalReader.Infrastructure.QqData.MessageBodies;
 
 namespace QQChatLocalReader.Application.Mcp;
 
-internal static class McpMessageFormatter
+public static class McpMessageFormatter
 {
     public static McpMessageDto Create(QqMessageRecord message) => new(
         message.AccountId,

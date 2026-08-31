@@ -8,14 +8,17 @@ public partial class App : System.Windows.Application
 {
     protected override async void OnStartup(StartupEventArgs e)
     {
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
         base.OnStartup(e);
         if (e.Args.Length == 0)
         {
-            new MainWindow().Show();
+            var window = new MainWindow();
+            MainWindow = window;
+            window.Closed += (_, _) => Shutdown();
+            window.Show();
             return;
         }
 
-        ShutdownMode = ShutdownMode.OnExplicitShutdown;
         try
         {
             Environment.ExitCode = e.Args[0].Equals("mcp", StringComparison.OrdinalIgnoreCase)
