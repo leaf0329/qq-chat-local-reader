@@ -15,6 +15,7 @@ using QQChatLocalReader.Core.Models;
 using QQChatLocalReader.Infrastructure.Exporting;
 using QQChatLocalReader.Infrastructure.Indexing;
 using QQChatLocalReader.Infrastructure.QqData;
+using QQChatLocalReader.Infrastructure.Security;
 
 namespace QQChatLocalReader.App;
 
@@ -190,11 +191,12 @@ public partial class MainWindow : Window
 
     private void CopyMcpConfig_Click(object sender, RoutedEventArgs e)
     {
+        var profile = McpAuthorizationProfileStore.OpenDefault().Create("通用 MCP 配置");
         var document = new
         {
             mcpServers = new Dictionary<string, object>
             {
-                ["qq-chat-local-reader"] = new { command = Environment.ProcessPath, args = new[] { "mcp" } },
+                ["qq-chat-local-reader"] = new { command = Environment.ProcessPath, args = new[] { "mcp", "--profile", profile.Id.ToString("D") } },
             },
         };
         Clipboard.SetText(JsonSerializer.Serialize(document, IndentedJson));

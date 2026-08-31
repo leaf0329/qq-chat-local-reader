@@ -1,6 +1,7 @@
 using System.Windows;
 using QQChatLocalReader.Application.CommandLine;
 using QQChatLocalReader.Application.Mcp;
+using QQChatLocalReader.Infrastructure.Security;
 
 namespace QQChatLocalReader.App;
 
@@ -22,7 +23,7 @@ public partial class App : System.Windows.Application
         try
         {
             Environment.ExitCode = e.Args[0].Equals("mcp", StringComparison.OrdinalIgnoreCase)
-                ? await RunMcpAsync().ConfigureAwait(true)
+                ? await RunMcpAsync(e.Args).ConfigureAwait(true)
                 : await CommandLineRunner.RunAsync(e.Args, Console.Out, Console.Error).ConfigureAwait(true);
         }
         finally
@@ -31,11 +32,21 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private static async Task<int> RunMcpAsync()
+    private static async Task<int> RunMcpAsync(string[] args)
     {
         try
         {
-            await McpServerRunner.RunAsync().ConfigureAwait(false);
+            var store = McpAuthorizationProfileStore.OpenDefault();
+            McpAuthorizationProfile? profile = null;
+            var profileIndex = Array.IndexOf(args, "--profile");
+            if (profileIndex >= 0)
+            {
+                if (profileIndex + 1 >= args.Length || !Guid.TryParse(args[profileIndex + 1], out var profileId))
+                    throw new ArgumentException("MCP 授权配置 ID 无效。");
+                profile = store.Read(profileId);
+            }
+
+            await McpServerRunner.RunAsync(new McpSyncRequestAuthorizer(store, profile)).ConfigureAwait(false);
             return 0;
         }
         catch (Exception exception)
