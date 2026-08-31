@@ -7,6 +7,9 @@
 #ifndef MyOutputDir
   #define MyOutputDir "..\artifacts\0.1.0"
 #endif
+#ifndef MyLanguageFile
+  #error MyLanguageFile must point to the pinned ChineseSimplified.isl build input
+#endif
 
 [Setup]
 AppId={{5F033A74-0D44-4E7C-B25D-650CFA5EB3CD}
@@ -31,7 +34,7 @@ RestartApplications=no
 UninstallDisplayIcon={app}\qq-chat-local-reader.exe
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimp"; MessagesFile: "{#MyLanguageFile}"
 
 [Files]
 Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -48,7 +51,7 @@ Filename: "{app}\qq-chat-local-reader.exe"; Parameters: "register-codex"; Descri
 Filename: "{app}\qq-chat-local-reader.exe"; Description: "启动 QQ 聊天本地读取器"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
-Filename: "{app}\qq-chat-local-reader.exe"; Parameters: "unregister-codex"; Flags: runhidden waituntilterminated skipifdoesntexist
+Filename: "{app}\qq-chat-local-reader.exe"; Parameters: "unregister-codex"; RunOnceId: "unregister-codex"; Flags: runhidden waituntilterminated skipifdoesntexist
 
 [Code]
 var

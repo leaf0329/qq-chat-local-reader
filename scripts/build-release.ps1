@@ -45,7 +45,25 @@ $zipPath = Join-Path $releaseRoot "qq-chat-local-reader-$Version-win-x64-portabl
 Compress-Archive -Path (Join-Path $portableRoot '*') -DestinationPath $zipPath -CompressionLevel Optimal
 
 if (-not [string]::IsNullOrWhiteSpace($InnoCompilerPath)) {
-    & $InnoCompilerPath "/DMyAppVersion=$Version" "/DMySourceDir=$portableRoot" "/DMyOutputDir=$releaseRoot" (Join-Path $repositoryRoot 'installer\qq-chat-local-reader.iss')
+    $languageCommit = '1ae7bf81dc0d2013235dfe4bb0b6f4e4a0b6b25c'
+    $languageHash = 'e0b0b350e2245f3c5e65586dfe43d574f6e7f06f2261149aba284954b3fc9a8d'
+    $buildInputsRoot = Join-Path $artifactsRoot '.build-inputs'
+    $languagePath = Join-Path $buildInputsRoot "ChineseSimplified-$languageCommit.isl"
+    New-Item -ItemType Directory -Path $buildInputsRoot -Force | Out-Null
+    if (-not (Test-Path -LiteralPath $languagePath -PathType Leaf)) {
+        $temporaryLanguagePath = $languagePath + '.tmp'
+        try {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/$languageCommit/Files/Languages/ChineseSimplified.isl" -OutFile $temporaryLanguagePath
+            Move-Item -LiteralPath $temporaryLanguagePath -Destination $languagePath
+        }
+        finally {
+            if (Test-Path -LiteralPath $temporaryLanguagePath) { Remove-Item -LiteralPath $temporaryLanguagePath -Force }
+        }
+    }
+
+    $actualLanguageHash = (Get-FileHash -LiteralPath $languagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualLanguageHash -ne $languageHash) { throw 'Pinned Inno Setup language file hash mismatch.' }
+    & $InnoCompilerPath "/DMyAppVersion=$Version" "/DMySourceDir=$portableRoot" "/DMyOutputDir=$releaseRoot" "/DMyLanguageFile=$languagePath" (Join-Path $repositoryRoot 'installer\qq-chat-local-reader.iss')
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 }
 
