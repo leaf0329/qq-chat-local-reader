@@ -122,6 +122,7 @@ $nmakeOptions = @(
     '-DSQLITE_EXTRA_INIT=sqlcipher_extra_init',
     '-DSQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown',
     '-DSQLCIPHER_CRYPTO_OPENSSL',
+    '-DHAVE_STDINT_H=1',
     '-DSQLITE_TEMP_STORE=2',
     '-DSQLITE_ENABLE_FTS5',
     '-DSQLITE_OMIT_LOAD_EXTENSION',
@@ -134,7 +135,7 @@ $commandLines = @(
     "call `"$vcvarsPath`" >nul || exit /b 1",
     "cd /d `"$sqlCipherSource`" || exit /b 1",
     "nmake /nologo /f Makefile.msc clean >nul 2>nul",
-    "nmake /nologo /f Makefile.msc sqlite3.dll USE_NATIVE_LIBPATHS=1 PLATFORM=x64 `"OPTS=$nmakeOptions`" `"LTLIBS=$linkLibraries`" || exit /b 1"
+    "nmake /nologo /f Makefile.msc sqlite3.dll USE_NATIVE_LIBPATHS=1 USE_CRT_DLL=1 PLATFORM=x64 `"OPTS=$nmakeOptions`" `"LTLIBS=$linkLibraries`" || exit /b 1"
 )
 [System.IO.File]::WriteAllLines($buildCommandPath, $commandLines, [System.Text.Encoding]::ASCII)
 $ErrorActionPreference = 'Continue'
