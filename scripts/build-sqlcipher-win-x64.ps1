@@ -122,6 +122,7 @@ $nmakeOptions = @(
     '-DSQLITE_EXTRA_INIT=sqlcipher_extra_init',
     '-DSQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown',
     '-DSQLCIPHER_CRYPTO_OPENSSL',
+    '-DSQLCIPHER_OMIT_LOG_DEVICE',
     '-DHAVE_STDINT_H=1',
     '-DSQLITE_TEMP_STORE=2',
     '-DSQLITE_ENABLE_FTS5',
