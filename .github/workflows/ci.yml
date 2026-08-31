@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress --yes
+
+      - name: Test and compile distributions
+        shell: powershell
+        run: ./scripts/build-release.ps1 -Version 0.1.0-ci -InnoCompilerPath 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+
+      - name: Verify expected artifacts
+        shell: powershell
+        run: |
+          $expected = @(
+            'artifacts/0.1.0-ci/qq-chat-local-reader-0.1.0-ci-win-x64-portable.zip',
+            'artifacts/0.1.0-ci/qq-chat-local-reader-0.1.0-ci-win-x64-setup.exe',
+            'artifacts/0.1.0-ci/SHA256SUMS.txt'
+          )
+          foreach ($path in $expected) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing artifact: $path" }
+          }

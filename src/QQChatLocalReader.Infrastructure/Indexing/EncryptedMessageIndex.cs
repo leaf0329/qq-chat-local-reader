@@ -50,13 +50,36 @@ public sealed class EncryptedMessageIndex : IDisposable
 
     public static EncryptedMessageIndex OpenDefault()
     {
+        return Open(GetDefaultDirectoryPath());
+    }
+
+    public static void DeleteDefault()
+    {
+        var directoryPath = GetDefaultDirectoryPath();
+        if (Directory.Exists(directoryPath))
+        {
+            Directory.Delete(directoryPath, recursive: true);
+        }
+    }
+
+    private static string GetDefaultDirectoryPath()
+    {
         var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localApplicationData))
         {
             throw new InvalidOperationException("The local application data directory is unavailable.");
         }
 
-        return Open(Path.Combine(localApplicationData, "QQChatLocalReader", "index-v1"));
+        var applicationRoot = Path.GetFullPath(Path.Combine(localApplicationData, "QQChatLocalReader"));
+        var directoryPath = Path.GetFullPath(Path.Combine(applicationRoot, "index-v1"));
+        if (!directoryPath.StartsWith(
+                applicationRoot + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The default index directory is outside the application data directory.");
+        }
+
+        return directoryPath;
     }
 
     public int UpsertMessages(IEnumerable<QqMessageRecord> messages)

@@ -3,6 +3,9 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Diagnostics;
+using System.Reflection;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -11,6 +14,7 @@ using Microsoft.Win32;
 using QQChatLocalReader.Application;
 using QQChatLocalReader.Application.Mcp;
 using QQChatLocalReader.Application.Sync;
+using QQChatLocalReader.Application.Updates;
 using QQChatLocalReader.Core.Models;
 using QQChatLocalReader.Infrastructure.Exporting;
 using QQChatLocalReader.Infrastructure.Indexing;
@@ -38,7 +42,11 @@ public partial class MainWindow : Window
 
     public ObservableCollection<MessageRow> Messages { get; } = [];
 
-    private async void Window_Loaded(object sender, RoutedEventArgs e) => await RefreshAccountsAsync();
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        await RefreshAccountsAsync();
+        await CheckForUpdatesAsync();
+    }
 
     private void Window_Closed(object? sender, EventArgs e) => runtime.Dispose();
 
@@ -201,6 +209,55 @@ public partial class MainWindow : Window
         };
         Clipboard.SetText(JsonSerializer.Serialize(document, IndentedJson));
         StatusText.Text = "通用 MCP 配置已复制。配置包含本机程序路径，不包含 QQ 数据或密钥。";
+    }
+
+    private void Settings_Click(object sender, RoutedEventArgs e) => new SettingsWindow(ClearLocalIndex) { Owner = this }.ShowDialog();
+
+    private void ClearLocalIndex()
+    {
+        if (MessageBox.Show(
+                this,
+                "这会永久删除本机加密聊天索引、搜索数据和同步任务记录，不会修改 QQ 原始聊天记录。删除后程序将退出，是否继续？",
+                "确认清除本地索引",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        jobTimer.Stop();
+        runtime.Dispose();
+        EncryptedMessageIndex.DeleteDefault();
+        MessageBox.Show(this, "本地加密索引已清除。QQ 原始聊天记录未被修改。", "清除完成", MessageBoxButton.OK, MessageBoxImage.Information);
+        Application.Current.Shutdown();
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        if (!ApplicationPreferencesStore.Read().CheckForUpdates) return;
+        try
+        {
+            var current = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
+            var update = await GitHubReleaseUpdateChecker.CheckAsync(current);
+            if (update?.IsNewer == true && MessageBox.Show(
+                this,
+                $"发现新版本 {update.VersionTag}。是否打开 GitHub Release 页面？",
+                "发现更新",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information) == MessageBoxResult.Yes)
+            {
+                Process.Start(new ProcessStartInfo(update.ReleasePage.AbsoluteUri) { UseShellExecute = true });
+            }
+        }
+        catch (HttpRequestException)
+        {
+            StatusText.Text = "暂时无法检查更新；本地读取、搜索和导出不受影响。";
+        }
+        catch (TaskCanceledException)
+        {
+            StatusText.Text = "更新检查超时；本地功能不受影响。";
+        }
     }
 
     private bool TrySelection(out AccountDescriptor account, out IReadOnlyList<ConversationDescriptor> conversations, out TimeRange range)

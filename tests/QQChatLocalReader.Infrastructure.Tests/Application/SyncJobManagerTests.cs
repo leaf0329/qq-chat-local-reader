@@ -63,6 +63,29 @@ public sealed class SyncJobManagerTests : IDisposable
         Assert.Empty(index.ReadMessages(CreateRequest().Conversations[0], CreateRequest().Range));
     }
 
+    [Fact]
+    public async Task LongRangeUsesThirtyOneDayBatchesWithinOneJob()
+    {
+        using var index = EncryptedMessageIndex.Open(testRoot);
+        var source = new RecordingSource();
+        using var manager = new SyncJobManager(source, new StubAuthorizer(allowed: true), index);
+        var conversation = CreateRequest().Conversations[0];
+        var request = new SyncRequest(
+            conversation.AccountId,
+            [conversation],
+            new TimeRange(
+                new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 3, 15, 0, 0, 0, TimeSpan.Zero)));
+
+        var result = await WaitForTerminalAsync(manager, manager.Start(request));
+
+        Assert.Equal(SyncJobState.Completed, result.State);
+        Assert.Equal(3, source.Ranges.Count);
+        Assert.All(source.Ranges, range => Assert.True(range.EndUtc - range.StartUtc <= TimeSpan.FromDays(31)));
+        Assert.Equal(request.Range.StartUtc, source.Ranges[0].StartUtc);
+        Assert.Equal(request.Range.EndUtc, source.Ranges[^1].EndUtc);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(testRoot))
@@ -135,6 +158,19 @@ public sealed class SyncJobManagerTests : IDisposable
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return [];
+        }
+    }
+
+    private sealed class RecordingSource : IMessageSyncSource
+    {
+        public List<TimeRange> Ranges { get; } = [];
+
+        public Task<IReadOnlyList<QqMessageRecord>> ReadMessagesAsync(
+            SyncRequest request,
+            CancellationToken cancellationToken)
+        {
+            Ranges.Add(request.Range);
+            return Task.FromResult<IReadOnlyList<QqMessageRecord>>([]);
         }
     }
 }

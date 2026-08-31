@@ -82,6 +82,22 @@ public sealed class McpAuthorizationProfileStore
         return updated;
     }
 
+    public bool Delete(Guid id)
+    {
+        var path = ProfilePath(id);
+        if (!File.Exists(path)) return false;
+        File.Delete(path);
+        return true;
+    }
+
+    public IReadOnlyList<McpAuthorizationProfile> List() => Directory.EnumerateFiles(directoryPath, "*.profile")
+        .Select(Path.GetFileNameWithoutExtension)
+        .Select(value => Guid.TryParseExact(value, "N", out var id) ? id : (Guid?)null)
+        .Where(id => id.HasValue)
+        .Select(id => Read(id!.Value))
+        .OrderBy(profile => profile.CreatedUtc)
+        .ToArray();
+
     private void Write(McpAuthorizationProfile profile, bool createNew)
     {
         var clear = JsonSerializer.SerializeToUtf8Bytes(profile);

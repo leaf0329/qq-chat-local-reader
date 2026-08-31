@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
 using QQChatLocalReader.Application.Mcp;
+using QQChatLocalReader.Application.Integration;
+using QQChatLocalReader.Infrastructure.Indexing;
 
 namespace QQChatLocalReader.Application.CommandLine;
 
@@ -28,6 +30,29 @@ public static class CommandLineRunner
 
         try
         {
+            if (args[0] == "clear-index")
+            {
+                if (!Flag(args, "--yes"))
+                {
+                    throw new ArgumentException("清除索引必须明确添加 --yes；该操作不会删除 QQ 原始聊天记录。");
+                }
+
+                EncryptedMessageIndex.DeleteDefault();
+                await output.WriteLineAsync("本地加密聊天索引已清除；QQ 原始聊天记录未被修改。").ConfigureAwait(false);
+                return 0;
+            }
+
+            if (args[0] is "register-codex" or "unregister-codex")
+            {
+                var executablePath = Environment.ProcessPath ?? throw new InvalidOperationException("无法确定当前程序路径。");
+                if (args[0] == "register-codex")
+                    await CodexMcpRegistrationService.RegisterAsync(executablePath, cancellationToken).ConfigureAwait(false);
+                else
+                    await CodexMcpRegistrationService.UnregisterAsync(executablePath, cancellationToken).ConfigureAwait(false);
+                await output.WriteLineAsync(args[0] == "register-codex" ? "Codex MCP 注册完成。" : "Codex MCP 注册已按安全规则移除。").ConfigureAwait(false);
+                return 0;
+            }
+
             using var runtime = ApplicationRuntime.OpenDefault();
             var tools = new QqReaderMcpTools(runtime);
             object result = args[0] switch
@@ -121,6 +146,9 @@ public static class CommandLineRunner
         job --id 任务ID          查询同步任务
         cancel --id 任务ID       取消同步任务
         export --account 账号 --type group|private --conversation 会话 --output 目录
+        register-codex            使用 Codex 官方命令注册本程序 MCP
+        unregister-codex          仅移除仍指向本程序的 Codex MCP 注册
+        clear-index --yes         清除本地加密索引（不修改 QQ 原始记录）
 
         时间省略时默认最近七个自然日。search 支持 --keyword、--sender、--page-size、--cursor；
         export 支持 --format markdown|json|csv 与 --privacy basic|raw（默认 basic）。

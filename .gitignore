@@ -27,6 +27,7 @@ venv/
 .tools/
 build/
 dist/
+artifacts/
 *.egg-info/
 
 # Local IDE and OS files

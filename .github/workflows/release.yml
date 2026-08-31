@@ -1,0 +1,44 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress --yes
+
+      - name: Build and test release
+        shell: powershell
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          ./scripts/build-release.ps1 -Version $version -InnoCompilerPath 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: artifacts/*/*
+
+      - name: Publish GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          gh release create '${{ github.ref_name }}' "artifacts/$version/qq-chat-local-reader-$version-win-x64-portable.zip" "artifacts/$version/qq-chat-local-reader-$version-win-x64-setup.exe" "artifacts/$version/SHA256SUMS.txt" --verify-tag --generate-notes --title "QQ Chat Local Reader $version"

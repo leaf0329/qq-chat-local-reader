@@ -127,9 +127,20 @@ public sealed class SyncJobManager : IDisposable
             await syncGate.WaitAsync(job.Cancellation.Token).ConfigureAwait(false);
             try
             {
-                var messages = await source.ReadMessagesAsync(request, job.Cancellation.Token).ConfigureAwait(false);
-                job.Cancellation.Token.ThrowIfCancellationRequested();
-                var count = index.UpsertMessages(messages);
+                var count = 0;
+                foreach (var batchRange in request.Range.SplitByMaximumDuration(TimeSpan.FromDays(31)))
+                {
+                    var batch = new SyncRequest(
+                        request.AccountId,
+                        request.Conversations,
+                        batchRange,
+                        request.IncludeForwarded);
+                    var messages = await source.ReadMessagesAsync(batch, job.Cancellation.Token).ConfigureAwait(false);
+                    job.Cancellation.Token.ThrowIfCancellationRequested();
+                    count += index.UpsertMessages(messages);
+                    Update(job, SyncJobState.Running, count);
+                }
+
                 Update(job, SyncJobState.Completed, count);
             }
             finally
