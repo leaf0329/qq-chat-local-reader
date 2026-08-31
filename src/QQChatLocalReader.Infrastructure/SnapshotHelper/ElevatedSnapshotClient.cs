@@ -138,7 +138,7 @@ public sealed class ElevatedSnapshotClient
         }
 
         var databasePath = ValidateSnapshotFile(directory, response.DatabasePath);
-        if (response.CompanionPaths is null || response.CompanionPaths.Length > 4)
+        if (response.CompanionPaths is null || response.CompanionPaths.Length > 9)
         {
             throw new InvalidDataException("The snapshot helper returned invalid companion files.");
         }

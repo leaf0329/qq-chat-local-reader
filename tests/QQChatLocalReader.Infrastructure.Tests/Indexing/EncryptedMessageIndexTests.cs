@@ -130,6 +130,14 @@ public sealed class EncryptedMessageIndexTests : IDisposable
         Assert.Equal(1, context.AnchorIndex);
         Assert.Equal(["1", "2", "4"], context.Messages.Select(message => message.StableMessageId));
         Assert.Throws<ArgumentOutOfRangeException>(() => index.ReadContext(group, "2", before: 101));
+
+        var status = index.GetStatus();
+        Assert.Equal(4, status.MessageCount);
+        Assert.Equal(2, status.Conversations.Count);
+        var groupCoverage = Assert.Single(status.Conversations, item => item.Type == ConversationType.Group);
+        Assert.Equal(3, groupCoverage.MessageCount);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_700_000_000), groupCoverage.FirstMessageUtc);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_700_000_003), groupCoverage.LastMessageUtc);
     }
 
     public void Dispose()

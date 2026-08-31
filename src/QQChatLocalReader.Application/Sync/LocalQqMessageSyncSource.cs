@@ -22,7 +22,7 @@ public sealed class LocalQqMessageSyncSource : IMessageSyncSource, ILocalQqCatal
         ArgumentNullException.ThrowIfNull(request);
         return await UseAdapterAsync(
             request.AccountId,
-            adapter =>
+            (adapter, _) =>
             {
                 var availableKeys = adapter.ListConversations()
                     .Select(item => item.StableKey)
@@ -48,14 +48,32 @@ public sealed class LocalQqMessageSyncSource : IMessageSyncSource, ILocalQqCatal
             .ToArray();
     }
 
-    public Task<IReadOnlyList<ConversationDescriptor>> ListConversationsAsync(
+    public async Task<IReadOnlyList<ConversationDescriptor>> ListConversationsAsync(
         string accountId,
         CancellationToken cancellationToken) =>
-        UseAdapterAsync(accountId, adapter => adapter.ListConversations(), cancellationToken);
+        await UseAdapterAsync<IReadOnlyList<ConversationDescriptor>>(accountId, (adapter, groupInfo) =>
+        {
+            var groupNames = groupInfo?.ReadGroupNames() ?? new Dictionary<string, string>(StringComparer.Ordinal);
+            return adapter.ListConversations()
+            .Select(item => item.Type == ConversationType.Group && groupNames.TryGetValue(item.Id, out var name)
+                ? new ConversationDescriptor(item.AccountId, item.Type, item.Id, name)
+                : item)
+            .ToArray();
+        }, cancellationToken).ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<GroupMemberDescriptor>> ListGroupMembersAsync(
+        string accountId,
+        string groupId,
+        CancellationToken cancellationToken) =>
+        await UseAdapterAsync<IReadOnlyList<GroupMemberDescriptor>>(
+            accountId,
+            (_, groupInfo) => (groupInfo ?? throw new InvalidOperationException("The QQ group information database is unavailable."))
+                .ReadGroupMembers(groupId),
+            cancellationToken).ConfigureAwait(false);
 
     private async Task<T> UseAdapterAsync<T>(
         string accountId,
-        Func<QqNtMessageDatabaseAdapter, T> action,
+        Func<QqNtMessageDatabaseAdapter, QqGroupInfoDatabaseAdapter?, T> action,
         CancellationToken cancellationToken)
     {
         var dataRoot = await QqUserDataConfiguration
@@ -82,7 +100,19 @@ public sealed class LocalQqMessageSyncSource : IMessageSyncSource, ILocalQqCatal
             databaseSet.AccountId,
             prepared,
             key);
+        QqGroupInfoDatabaseAdapter? groupInfo = null;
+        if (snapshot.CompanionPaths.Any(path =>
+                Path.GetFileName(path).Equals("group_info.db", StringComparison.OrdinalIgnoreCase)))
+        {
+            await using var groupPrepared = await QqDatabaseImagePreparer
+                .PrepareGroupInformationAsync(snapshot, cancellationToken)
+                .ConfigureAwait(false);
+            groupInfo = QqGroupInfoDatabaseAdapter.Open(runtime.Version, groupPrepared, key);
+            cancellationToken.ThrowIfCancellationRequested();
+            return action(adapter, groupInfo);
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
-        return action(adapter);
+        return action(adapter, groupInfo);
     }
 }

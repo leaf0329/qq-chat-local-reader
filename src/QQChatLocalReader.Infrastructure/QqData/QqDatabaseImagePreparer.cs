@@ -13,8 +13,21 @@ public static class QqDatabaseImagePreparer
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        return await PrepareImageAsync(
+            snapshot.DirectoryPath,
+            snapshot.DatabasePath,
+            snapshot.CompanionPaths,
+            cancellationToken).ConfigureAwait(false);
+    }
 
-        var sourceInfo = new FileInfo(snapshot.DatabasePath);
+    private static async Task<QqPreparedDatabase> PrepareImageAsync(
+        string directoryPath,
+        string databasePath,
+        IReadOnlyList<string> companionPaths,
+        CancellationToken cancellationToken)
+    {
+
+        var sourceInfo = new FileInfo(databasePath);
         if (sourceInfo.Length <= QqHeaderSize ||
             (sourceInfo.Length - QqHeaderSize) % CipherPageSize != 0)
         {
@@ -22,20 +35,20 @@ public static class QqDatabaseImagePreparer
         }
 
         var destinationPath = Path.Combine(
-            snapshot.DirectoryPath,
+            directoryPath,
             $"prepared-{Guid.NewGuid():N}.db");
-        var prepared = new QqPreparedDatabase(snapshot.DirectoryPath, destinationPath);
+        var prepared = new QqPreparedDatabase(directoryPath, destinationPath);
 
         try
         {
             await CopyWithoutPrefixAsync(
-                snapshot.DatabasePath,
+                databasePath,
                 destinationPath,
                 cancellationToken).ConfigureAwait(false);
 
-            var walPath = snapshot.CompanionPaths.FirstOrDefault(path =>
+            var walPath = companionPaths.FirstOrDefault(path =>
                 Path.GetFileName(path).Equals(
-                    Path.GetFileName(snapshot.DatabasePath) + "-wal",
+                    Path.GetFileName(databasePath) + "-wal",
                     StringComparison.OrdinalIgnoreCase));
             if (walPath is not null)
             {
@@ -63,6 +76,19 @@ public static class QqDatabaseImagePreparer
 
             throw;
         }
+    }
+
+    public static Task<QqPreparedDatabase> PrepareGroupInformationAsync(
+        DatabaseSnapshot snapshot,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        var databasePath = snapshot.CompanionPaths.SingleOrDefault(path =>
+            Path.GetFileName(path).Equals("group_info.db", StringComparison.OrdinalIgnoreCase)) ??
+            throw new FileNotFoundException("The QQ group information database is unavailable in the snapshot.");
+        var companions = snapshot.CompanionPaths.Where(path =>
+            Path.GetFileName(path).StartsWith("group_info.db-", StringComparison.OrdinalIgnoreCase)).ToArray();
+        return PrepareImageAsync(snapshot.DirectoryPath, databasePath, companions, cancellationToken);
     }
 
     private static async Task CopyWithoutPrefixAsync(

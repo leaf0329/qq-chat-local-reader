@@ -35,6 +35,7 @@ public sealed class QqDatabaseDiscovery
             var companions = CompanionSuffixes
                 .Select(suffix => databasePath + suffix)
                 .Where(File.Exists)
+                .Concat(DiscoverGroupInfoFiles(Path.GetDirectoryName(databasePath)!))
                 .ToArray();
 
             results.Add(new QqDatabaseSet(accountId, databasePath, companions));
@@ -43,5 +44,17 @@ public sealed class QqDatabaseDiscovery
         return results
             .OrderBy(result => result.AccountId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static IEnumerable<string> DiscoverGroupInfoFiles(string databaseDirectory)
+    {
+        var groupInfoPath = Path.Combine(databaseDirectory, "group_info.db");
+        if (!File.Exists(groupInfoPath)) yield break;
+        yield return groupInfoPath;
+        foreach (var suffix in CompanionSuffixes)
+        {
+            var path = groupInfoPath + suffix;
+            if (File.Exists(path)) yield return path;
+        }
     }
 }

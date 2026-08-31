@@ -9,4 +9,9 @@ public interface ILocalQqCatalog
     Task<IReadOnlyList<ConversationDescriptor>> ListConversationsAsync(
         string accountId,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<GroupMemberDescriptor>> ListGroupMembersAsync(
+        string accountId,
+        string groupId,
+        CancellationToken cancellationToken);
 }

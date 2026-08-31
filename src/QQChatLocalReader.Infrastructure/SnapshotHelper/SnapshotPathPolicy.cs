@@ -4,6 +4,7 @@ namespace QQChatLocalReader.Infrastructure.SnapshotHelper;
 
 internal static class SnapshotPathPolicy
 {
+    private static readonly string[] AllowedDatabaseNames = ["nt_msg.db", "group_info.db"];
     private static readonly string[] AllowedCompanionSuffixes =
     [
         "-wal",
@@ -49,14 +50,14 @@ internal static class SnapshotPathPolicy
         var databaseDirectory = Directory.GetParent(databasePath);
         var ntQqDirectory = databaseDirectory?.Parent;
         var accountDirectory = ntQqDirectory?.Parent;
-        if (!Path.GetFileName(databasePath).Equals("nt_msg.db", StringComparison.OrdinalIgnoreCase) ||
+        if (!AllowedDatabaseNames.Contains(Path.GetFileName(databasePath), StringComparer.OrdinalIgnoreCase) ||
             databaseDirectory is null ||
             ntQqDirectory is null ||
             accountDirectory is null ||
             !databaseDirectory.Name.Equals("nt_db", StringComparison.OrdinalIgnoreCase) ||
             !ntQqDirectory.Name.Equals("nt_qq", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException("The source is not a QQ message database.");
+            throw new InvalidDataException("The source is not an allowed QQ database.");
         }
 
         var normalizedConfiguredRoot = Path.GetFullPath(configuredRoot)
@@ -74,7 +75,7 @@ internal static class SnapshotPathPolicy
         }
 
         if (request.CompanionPaths is null ||
-            request.CompanionPaths.Length > AllowedCompanionSuffixes.Length)
+            request.CompanionPaths.Length > (AllowedCompanionSuffixes.Length * 2) + 1)
         {
             throw new InvalidDataException("Too many QQ companion files were requested.");
         }
@@ -85,8 +86,13 @@ internal static class SnapshotPathPolicy
             .ToArray();
         foreach (var companionPath in companions)
         {
-            if (!AllowedCompanionSuffixes.Any(suffix =>
-                    companionPath.Equals(databasePath + suffix, StringComparison.OrdinalIgnoreCase)) ||
+            var groupInfoPath = Path.Combine(databaseDirectory.FullName, "group_info.db");
+            var isPrimaryCompanion = AllowedCompanionSuffixes.Any(suffix =>
+                companionPath.Equals(databasePath + suffix, StringComparison.OrdinalIgnoreCase));
+            var isGroupInformation = Path.GetFileName(databasePath).Equals("nt_msg.db", StringComparison.OrdinalIgnoreCase) &&
+                (companionPath.Equals(groupInfoPath, StringComparison.OrdinalIgnoreCase) ||
+                 AllowedCompanionSuffixes.Any(suffix => companionPath.Equals(groupInfoPath + suffix, StringComparison.OrdinalIgnoreCase)));
+            if ((!isPrimaryCompanion && !isGroupInformation) ||
                 !File.Exists(companionPath) ||
                 HasReparsePoint(new FileInfo(companionPath)))
             {

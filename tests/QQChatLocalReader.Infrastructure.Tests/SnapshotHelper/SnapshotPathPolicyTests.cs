@@ -59,6 +59,19 @@ public sealed class SnapshotPathPolicyTests : IDisposable
             SnapshotPathPolicy.ValidateRequest(CreateRequest(databasePath, []), testRoot));
     }
 
+    [Fact]
+    public void ValidateRequestAllowsGroupInformationDatabase()
+    {
+        var databaseDirectory = Path.Combine(testRoot, "masked-account", "nt_qq", "nt_db");
+        Directory.CreateDirectory(databaseDirectory);
+        var databasePath = Path.Combine(databaseDirectory, "group_info.db");
+        File.WriteAllBytes(databasePath, [1]);
+
+        var result = SnapshotPathPolicy.ValidateRequest(CreateRequest(databasePath, []), testRoot);
+
+        Assert.Equal(databasePath, result.DatabasePath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(testRoot))

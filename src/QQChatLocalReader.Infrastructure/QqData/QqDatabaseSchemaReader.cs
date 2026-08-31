@@ -34,6 +34,7 @@ public static class QqDatabaseSchemaReader
                 FROM sqlite_schema
                 WHERE type = 'table'
                   AND name NOT LIKE 'sqlite_%'
+                  AND upper(ltrim(sql)) NOT LIKE 'CREATE VIRTUAL TABLE%'
                 ORDER BY name;
                 """;
             using var reader = command.ExecuteReader();

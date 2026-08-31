@@ -162,6 +162,44 @@ public sealed class EncryptedMessageIndex : IDisposable
         return conversations;
     }
 
+    public MessageIndexStatus GetStatus()
+    {
+        using var connection = OpenConnection(readOnly: true);
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT conversation.account_id, conversation.conversation_type,
+                   conversation.conversation_id, conversation.display_name,
+                   count(message.message_id), min(message.timestamp_utc), max(message.timestamp_utc)
+            FROM conversations AS conversation
+            LEFT JOIN messages AS message
+              ON message.account_id = conversation.account_id
+             AND message.conversation_type = conversation.conversation_type
+             AND message.conversation_id = conversation.conversation_id
+            GROUP BY conversation.account_id, conversation.conversation_type,
+                     conversation.conversation_id, conversation.display_name
+            ORDER BY conversation.account_id, conversation.conversation_type, conversation.conversation_id;
+            """;
+        using var reader = command.ExecuteReader();
+        var rows = new List<ConversationIndexCoverage>();
+        var total = 0;
+        while (reader.Read())
+        {
+            var count = reader.GetInt32(4);
+            total += count;
+            rows.Add(new ConversationIndexCoverage(
+                reader.GetString(0),
+                (ConversationType)reader.GetInt32(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                count,
+                reader.IsDBNull(5) ? null : DateTimeOffset.FromUnixTimeSeconds(reader.GetInt64(5)),
+                reader.IsDBNull(6) ? null : DateTimeOffset.FromUnixTimeSeconds(reader.GetInt64(6))));
+        }
+
+        return new MessageIndexStatus(total, rows);
+    }
+
     public IReadOnlyList<QqMessageRecord> ReadMessages(
         ConversationDescriptor conversation,
         TimeRange range)
