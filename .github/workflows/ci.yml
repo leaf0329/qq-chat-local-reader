@@ -26,6 +26,7 @@ jobs:
       - name: Test and compile distributions
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Path artifacts -Force | Out-Null
           try {
             ./scripts/build-release.ps1 -Version 0.1.0-ci -InnoCompilerPath 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' *>&1 | Tee-Object -FilePath artifacts/ci-build.log
@@ -33,7 +34,10 @@ jobs:
           catch {
             $detail = ((Get-Content -LiteralPath artifacts/ci-build.log -Tail 12) + $_.Exception.Message) -join "`n"
             $escaped = $detail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
-            Write-Output "::error title=Distribution build failed::$escaped"
+            Write-Host "::error title=Distribution build failed::$escaped"
+            if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+              Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "### Distribution build failed`n``````text`n$detail`n``````"
+            }
             throw
           }
 
