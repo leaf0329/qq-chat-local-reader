@@ -9,7 +9,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $artifactsRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot 'artifacts'))
-$buildInputsRoot = Join-Path $artifactsRoot '.build-inputs'
+$buildInputsRoot = if ([string]::IsNullOrWhiteSpace($env:QCLR_NATIVE_BUILD_INPUTS)) {
+    Join-Path $artifactsRoot '.build-inputs'
+}
+else {
+    [System.IO.Path]::GetFullPath($env:QCLR_NATIVE_BUILD_INPUTS)
+}
 $sqlCipherCommit = 'c7e811b399379c948b423872ad7ba91d2ce38434'
 $vcpkgCommit = '701d832d37ccc61ec86855927d71c55dd7f624dc'
 $triplet = 'x64-windows-static-md'
@@ -64,12 +69,26 @@ Get-PinnedRepository -Url 'https://github.com/microsoft/vcpkg.git' -Commit $vcpk
 
 $vcpkgExe = Join-Path $vcpkgRoot 'vcpkg.exe'
 if (-not (Test-Path -LiteralPath $vcpkgExe -PathType Leaf)) {
-    & (Join-Path $vcpkgRoot 'bootstrap-vcpkg.bat') -disableMetrics
-    if ($LASTEXITCODE -ne 0) { throw 'vcpkg bootstrap failed.' }
+    $bootstrapOutput = @(& (Join-Path $vcpkgRoot 'bootstrap-vcpkg.bat') -disableMetrics 2>&1)
+    $bootstrapExitCode = $LASTEXITCODE
+    $bootstrapOutput | Write-Output
+    if ($bootstrapExitCode -ne 0) {
+        $bootstrapDetail = (($bootstrapOutput | Select-Object -Last 16) -join "`n")
+        $escapedBootstrapDetail = $bootstrapDetail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+        Write-Host "::error title=vcpkg bootstrap failed::$escapedBootstrapDetail"
+        throw 'vcpkg bootstrap failed.'
+    }
 }
 
-& $vcpkgExe install "openssl:$triplet" --clean-after-build --disable-metrics
-if ($LASTEXITCODE -ne 0) { throw 'Pinned OpenSSL build failed.' }
+$vcpkgOutput = @(& $vcpkgExe install "openssl:$triplet" --clean-after-build --disable-metrics 2>&1)
+$vcpkgExitCode = $LASTEXITCODE
+$vcpkgOutput | Write-Output
+if ($vcpkgExitCode -ne 0) {
+    $vcpkgDetail = (($vcpkgOutput | Select-Object -Last 16) -join "`n")
+    $escapedVcpkgDetail = $vcpkgDetail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+    Write-Host "::error title=Pinned OpenSSL build failed::$escapedVcpkgDetail"
+    throw 'Pinned OpenSSL build failed.'
+}
 
 $opensslRoot = Join-Path $vcpkgRoot "installed\$triplet"
 $opensslInclude = Join-Path $opensslRoot 'include'

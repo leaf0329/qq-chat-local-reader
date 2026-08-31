@@ -12,6 +12,8 @@ permissions:
 jobs:
   windows-package:
     runs-on: windows-latest
+    env:
+      QCLR_NATIVE_BUILD_INPUTS: C:\qclr-native
     steps:
       - uses: actions/checkout@v5
 
@@ -22,7 +24,7 @@ jobs:
       - name: Cache pinned native build inputs
         uses: actions/cache@v4
         with:
-          path: artifacts/.build-inputs
+          path: C:\qclr-native
           key: sqlcipher-win-x64-c7e811b3-vcpkg-701d832d
 
       - name: Install Inno Setup
