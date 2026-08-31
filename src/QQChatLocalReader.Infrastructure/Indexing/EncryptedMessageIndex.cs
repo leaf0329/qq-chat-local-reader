@@ -10,7 +10,7 @@ namespace QQChatLocalReader.Infrastructure.Indexing;
 public sealed class EncryptedMessageIndex : IDisposable
 {
     private const int ApplicationId = 1_363_364_946;
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;
     private const string DatabaseFileName = "messages.db";
     private readonly string databasePath;
     private IndexDatabaseKey? key;
@@ -80,6 +80,60 @@ public sealed class EncryptedMessageIndex : IDisposable
 
         transaction.Commit();
         return records.Length;
+    }
+
+    public void SaveSyncJob(IndexSyncJobRecord job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO sync_jobs (
+                job_id, state, created_utc, updated_utc, message_count, error_code, request_json)
+            VALUES ($jobId, $state, $created, $updated, $count, $error, $request)
+            ON CONFLICT (job_id) DO UPDATE SET
+                state = excluded.state,
+                updated_utc = excluded.updated_utc,
+                message_count = excluded.message_count,
+                error_code = excluded.error_code,
+                request_json = excluded.request_json;
+            """;
+        command.Parameters.AddWithValue("$jobId", job.JobId.ToString("D"));
+        command.Parameters.AddWithValue("$state", job.State);
+        command.Parameters.AddWithValue("$created", job.CreatedUtc.ToUnixTimeMilliseconds());
+        command.Parameters.AddWithValue("$updated", job.UpdatedUtc.ToUnixTimeMilliseconds());
+        command.Parameters.AddWithValue("$count", (object?)job.MessageCount ?? DBNull.Value);
+        command.Parameters.AddWithValue("$error", (object?)job.ErrorCode ?? DBNull.Value);
+        command.Parameters.AddWithValue("$request", job.RequestJson);
+        command.ExecuteNonQuery();
+    }
+
+    public IReadOnlyList<IndexSyncJobRecord> ReadSyncJobs()
+    {
+        using var connection = OpenConnection(readOnly: true);
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT job_id, state, created_utc, updated_utc, message_count, error_code, request_json
+            FROM sync_jobs
+            ORDER BY created_utc, job_id;
+            """;
+        using var reader = command.ExecuteReader();
+        var jobs = new List<IndexSyncJobRecord>();
+        while (reader.Read())
+        {
+            jobs.Add(new IndexSyncJobRecord(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetInt32(1),
+                DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(2)),
+                DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(3)),
+                reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetString(6)));
+        }
+
+        return jobs;
     }
 
     public IReadOnlyList<QqMessageRecord> ReadMessages(
@@ -285,7 +339,7 @@ public sealed class EncryptedMessageIndex : IDisposable
             throw new InvalidDataException("The selected database is not a QQ Chat Local Reader index.");
         }
 
-        if (schemaVersion is not 0 and not SchemaVersion)
+        if (schemaVersion < 0 || schemaVersion > SchemaVersion)
         {
             throw new InvalidDataException("The message index schema version is not supported.");
         }
@@ -343,6 +397,16 @@ public sealed class EncryptedMessageIndex : IDisposable
                 FOREIGN KEY (account_id, conversation_type, conversation_id, message_id)
                     REFERENCES messages (account_id, conversation_type, conversation_id, message_id)
                     ON DELETE CASCADE
+            ) WITHOUT ROWID;
+
+            CREATE TABLE IF NOT EXISTS sync_jobs (
+                job_id TEXT PRIMARY KEY,
+                state INTEGER NOT NULL,
+                created_utc INTEGER NOT NULL,
+                updated_utc INTEGER NOT NULL,
+                message_count INTEGER,
+                error_code TEXT,
+                request_json TEXT NOT NULL
             ) WITHOUT ROWID;
             """);
         Execute(connection, transaction, $"PRAGMA application_id = {ApplicationId.ToString(CultureInfo.InvariantCulture)};");

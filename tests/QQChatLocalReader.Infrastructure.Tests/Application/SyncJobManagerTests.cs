@@ -30,6 +30,15 @@ public sealed class SyncJobManagerTests : IDisposable
         Assert.Single(index.ReadMessages(
             CreateRequest().Conversations[0],
             CreateRequest().Range));
+
+        manager.Dispose();
+        using var restoredManager = new SyncJobManager(
+            new StubSource([CreateMessage()]),
+            new StubAuthorizer(allowed: true),
+            index);
+        Assert.Equal(SyncJobState.Completed, restoredManager.Get(jobId).State);
+        var restarted = await WaitForTerminalAsync(restoredManager, restoredManager.Restart(jobId));
+        Assert.Equal(SyncJobState.Completed, restarted.State);
     }
 
     [Fact]

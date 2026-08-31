@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using QQChatLocalReader.Core.Models;
 using QQChatLocalReader.Infrastructure.Indexing;
 
@@ -21,20 +22,43 @@ public sealed class SyncJobManager : IDisposable
         this.source = source ?? throw new ArgumentNullException(nameof(source));
         this.authorizer = authorizer ?? throw new ArgumentNullException(nameof(authorizer));
         this.index = index ?? throw new ArgumentNullException(nameof(index));
+        foreach (var persisted in index.ReadSyncJobs())
+        {
+            var job = new Job(persisted);
+            if (job.Snapshot().State is SyncJobState.AwaitingAuthorization or SyncJobState.Running)
+            {
+                job.Update(SyncJobState.Failed, errorCode: "interrupted_by_restart");
+                Persist(job);
+            }
+
+            jobs.TryAdd(job.Id, job);
+        }
     }
 
     public Guid Start(SyncRequest request)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentNullException.ThrowIfNull(request);
-        var job = new Job(Guid.NewGuid());
+        var job = new Job(Guid.NewGuid(), SerializeRequest(request));
         if (!jobs.TryAdd(job.Id, job))
         {
             throw new InvalidOperationException("A unique synchronization job could not be created.");
         }
 
+        Persist(job);
         job.Execution = RunAsync(job, request);
         return job.Id;
+    }
+
+    public Guid Restart(Guid jobId)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (!jobs.TryGetValue(jobId, out var job))
+        {
+            throw new KeyNotFoundException("The synchronization job was not found.");
+        }
+
+        return Start(DeserializeRequest(job.RequestJson));
     }
 
     public SyncJobSnapshot Get(Guid jobId)
@@ -95,18 +119,18 @@ public sealed class SyncJobManager : IDisposable
         {
             if (!await authorizer.AuthorizeAsync(request, job.Cancellation.Token).ConfigureAwait(false))
             {
-                job.Update(SyncJobState.Rejected);
+                Update(job, SyncJobState.Rejected);
                 return;
             }
 
-            job.Update(SyncJobState.Running);
+            Update(job, SyncJobState.Running);
             await syncGate.WaitAsync(job.Cancellation.Token).ConfigureAwait(false);
             try
             {
                 var messages = await source.ReadMessagesAsync(request, job.Cancellation.Token).ConfigureAwait(false);
                 job.Cancellation.Token.ThrowIfCancellationRequested();
                 var count = index.UpsertMessages(messages);
-                job.Update(SyncJobState.Completed, count);
+                Update(job, SyncJobState.Completed, count);
             }
             finally
             {
@@ -115,12 +139,60 @@ public sealed class SyncJobManager : IDisposable
         }
         catch (OperationCanceledException) when (job.Cancellation.IsCancellationRequested)
         {
-            job.Update(SyncJobState.Canceled);
+            Update(job, SyncJobState.Canceled);
         }
         catch
         {
-            job.Update(SyncJobState.Failed, errorCode: "sync_failed");
+            Update(job, SyncJobState.Failed, errorCode: "sync_failed");
         }
+    }
+
+    private void Update(Job job, SyncJobState state, int? count = null, string? errorCode = null)
+    {
+        job.Update(state, count, errorCode);
+        Persist(job);
+    }
+
+    private void Persist(Job job)
+    {
+        var snapshot = job.Snapshot();
+        index.SaveSyncJob(new IndexSyncJobRecord(
+            snapshot.JobId,
+            (int)snapshot.State,
+            snapshot.CreatedUtc,
+            snapshot.UpdatedUtc,
+            snapshot.MessageCount,
+            snapshot.ErrorCode,
+            job.RequestJson));
+    }
+
+    private static string SerializeRequest(SyncRequest request) => JsonSerializer.Serialize(new RequestDocument
+    {
+        AccountId = request.AccountId,
+        Conversations = request.Conversations.Select(item => new ConversationDocument
+        {
+            Type = item.Type,
+            Id = item.Id,
+            DisplayName = item.DisplayName,
+        }).ToArray(),
+        StartUtc = request.Range.StartUtc,
+        EndUtc = request.Range.EndUtc,
+        IncludeForwarded = request.IncludeForwarded,
+    });
+
+    private static SyncRequest DeserializeRequest(string json)
+    {
+        var document = JsonSerializer.Deserialize<RequestDocument>(json) ??
+            throw new InvalidDataException("The persisted synchronization request is invalid.");
+        return new SyncRequest(
+            document.AccountId,
+            document.Conversations.Select(item => new ConversationDescriptor(
+                document.AccountId,
+                item.Type,
+                item.Id,
+                item.DisplayName)),
+            new TimeRange(document.StartUtc, document.EndUtc),
+            document.IncludeForwarded);
     }
 
     private sealed class Job
@@ -131,16 +203,32 @@ public sealed class SyncJobManager : IDisposable
         private int? messageCount;
         private string? errorCode;
 
-        public Job(Guid id)
+        public Job(Guid id, string requestJson)
         {
             Id = id;
+            RequestJson = requestJson;
             CreatedUtc = DateTimeOffset.UtcNow;
             updatedUtc = CreatedUtc;
+        }
+
+        public Job(IndexSyncJobRecord record)
+        {
+            Id = record.JobId;
+            RequestJson = record.RequestJson;
+            CreatedUtc = record.CreatedUtc;
+            updatedUtc = record.UpdatedUtc;
+            state = Enum.IsDefined(typeof(SyncJobState), record.State)
+                ? (SyncJobState)record.State
+                : SyncJobState.Failed;
+            messageCount = record.MessageCount;
+            errorCode = record.ErrorCode;
         }
 
         public Guid Id { get; }
 
         public DateTimeOffset CreatedUtc { get; }
+
+        public string RequestJson { get; }
 
         public CancellationTokenSource Cancellation { get; } = new();
 
@@ -164,5 +252,21 @@ public sealed class SyncJobManager : IDisposable
                 return new SyncJobSnapshot(Id, state, CreatedUtc, updatedUtc, messageCount, errorCode);
             }
         }
+    }
+
+    private sealed class RequestDocument
+    {
+        public required string AccountId { get; init; }
+        public required ConversationDocument[] Conversations { get; init; }
+        public required DateTimeOffset StartUtc { get; init; }
+        public required DateTimeOffset EndUtc { get; init; }
+        public required bool IncludeForwarded { get; init; }
+    }
+
+    private sealed class ConversationDocument
+    {
+        public required ConversationType Type { get; init; }
+        public required string Id { get; init; }
+        public required string DisplayName { get; init; }
     }
 }
