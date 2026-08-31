@@ -67,7 +67,7 @@ if (-not [string]::IsNullOrWhiteSpace($InnoCompilerPath)) {
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 }
 
-Get-ChildItem -LiteralPath $releaseRoot -File | ForEach-Object {
+Get-ChildItem -LiteralPath $releaseRoot -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
     $hash = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
     "$($hash.Hash.ToLowerInvariant())  $($_.Name)"
 } | Set-Content -LiteralPath (Join-Path $releaseRoot 'SHA256SUMS.txt') -Encoding utf8NoBOM
