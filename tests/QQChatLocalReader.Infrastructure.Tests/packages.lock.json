@@ -151,6 +151,13 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "qqchatlocalreader.application": {
+        "type": "Project",
+        "dependencies": {
+          "QQChatLocalReader.Core": "[1.0.0, )",
+          "QQChatLocalReader.Infrastructure": "[1.0.0, )"
+        }
+      },
       "qqchatlocalreader.core": {
         "type": "Project"
       },

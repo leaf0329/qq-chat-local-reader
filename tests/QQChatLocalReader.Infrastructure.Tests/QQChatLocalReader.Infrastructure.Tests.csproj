@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\QQChatLocalReader.Application\QQChatLocalReader.Application.csproj" />
     <ProjectReference Include="..\..\src\QQChatLocalReader.Infrastructure\QQChatLocalReader.Infrastructure.csproj" />
   </ItemGroup>
 

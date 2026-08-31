@@ -1,17 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <ProjectReference Include="..\QQChatLocalReader.Application\QQChatLocalReader.Application.csproj" />
     <ProjectReference Include="..\QQChatLocalReader.Core\QQChatLocalReader.Core.csproj" />
     <ProjectReference Include="..\QQChatLocalReader.Infrastructure\QQChatLocalReader.Infrastructure.csproj" />
   </ItemGroup>
-
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
-
 </Project>
