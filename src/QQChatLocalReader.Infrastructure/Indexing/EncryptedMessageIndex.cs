@@ -136,6 +136,32 @@ public sealed class EncryptedMessageIndex : IDisposable
         return jobs;
     }
 
+    public IReadOnlyList<ConversationDescriptor> ListConversations(string? accountId = null)
+    {
+        using var connection = OpenConnection(readOnly: true);
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT account_id, conversation_type, conversation_id, display_name
+            FROM conversations
+            WHERE $accountId IS NULL OR account_id = $accountId
+            ORDER BY account_id, conversation_type, display_name, conversation_id;
+            """;
+        command.Parameters.AddWithValue("$accountId", (object?)accountId ?? DBNull.Value);
+        using var reader = command.ExecuteReader();
+        var conversations = new List<ConversationDescriptor>();
+        while (reader.Read())
+        {
+            conversations.Add(new ConversationDescriptor(
+                reader.GetString(0),
+                (ConversationType)reader.GetInt32(1),
+                reader.GetString(2),
+                reader.GetString(3)));
+        }
+
+        return conversations;
+    }
+
     public IReadOnlyList<QqMessageRecord> ReadMessages(
         ConversationDescriptor conversation,
         TimeRange range)

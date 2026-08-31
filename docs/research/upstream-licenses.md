@@ -16,6 +16,7 @@ Reviewed on 2026-08-30. Repository metadata and license texts must be checked ag
 | `Google.Protobuf` 3.36.0 | BSD-3-Clause | Approved runtime dependency for bounded Protobuf wire decoding; include its copyright and license notice in distributed third-party notices. |
 | `System.Security.Cryptography.ProtectedData` 10.0.11 | MIT | Approved Windows DPAPI wrapper; include its license notice in distributed third-party notices. |
 | `SQLitePCLRaw.bundle_e_sqlcipher` 2.1.11 and native dependencies | Apache-2.0 / SQLCipher BSD-style terms | Development-only approval is recorded in ADR 0008. NuGet marks the bundle legacy and unmaintained; a maintained or reproducibly built replacement and complete binary notices are required before release. |
+| `ModelContextProtocol` 2.2.0 | Apache-2.0 | Official Tier 1 C# SDK used for the local STDIO MCP server. Include its license and transitive dependency notices in release artifacts. |
 
 ## Rules
 
