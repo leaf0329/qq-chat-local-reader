@@ -106,8 +106,15 @@ $commandLines = @(
     "nmake /nologo /f Makefile.msc sqlite3.dll USE_NATIVE_LIBPATHS=1 PLATFORM=x64 `"OPTS=$nmakeOptions`" `"LTLIBS=$linkLibraries`" || exit /b 1"
 )
 [System.IO.File]::WriteAllLines($buildCommandPath, $commandLines, [System.Text.Encoding]::ASCII)
-& cmd.exe /d /c $buildCommandPath
-if ($LASTEXITCODE -ne 0) { throw 'Pinned SQLCipher native build failed.' }
+$nativeBuildOutput = @(& cmd.exe /d /c $buildCommandPath 2>&1)
+$nativeBuildExitCode = $LASTEXITCODE
+$nativeBuildOutput | Write-Output
+if ($nativeBuildExitCode -ne 0) {
+    $failureDetail = (($nativeBuildOutput | Select-Object -Last 16) -join "`n")
+    $escapedFailureDetail = $failureDetail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+    Write-Host "::error title=SQLCipher native build failed::$escapedFailureDetail"
+    throw 'Pinned SQLCipher native build failed.'
+}
 
 $builtDll = Join-Path $sqlCipherSource 'sqlite3.dll'
 if (-not (Test-Path -LiteralPath $builtDll -PathType Leaf)) { throw 'SQLCipher build did not produce sqlite3.dll.' }

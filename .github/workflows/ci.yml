@@ -19,6 +19,12 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Cache pinned native build inputs
+        uses: actions/cache@v4
+        with:
+          path: artifacts/.build-inputs
+          key: sqlcipher-win-x64-c7e811b3-vcpkg-701d832d
+
       - name: Install Inno Setup
         shell: powershell
         run: choco install innosetup --no-progress --yes
