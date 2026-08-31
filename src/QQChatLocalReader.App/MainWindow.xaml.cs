@@ -230,7 +230,7 @@ public partial class MainWindow : Window
         runtime.Dispose();
         EncryptedMessageIndex.DeleteDefault();
         MessageBox.Show(this, "本地加密索引已清除。QQ 原始聊天记录未被修改。", "清除完成", MessageBoxButton.OK, MessageBoxImage.Information);
-        Application.Current.Shutdown();
+        System.Windows.Application.Current.Shutdown();
     }
 
     private async Task CheckForUpdatesAsync()
